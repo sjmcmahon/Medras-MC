@@ -1,6 +1,5 @@
 
 # Medras-MC
-----
 
 This is a Monte Carlo implementation of the MEDRAS (Mechanistic DNA Repair and Survival) model. This model simulates the response of cells to DNA damage following ionising radiation exposure, including DNA repair kinetics, accuracy of repair, and resulting cell fate. 
 
@@ -11,7 +10,7 @@ This code is designed to read in DNA damage data stored in the Standard for DNA 
 This distribution consists of two components - damagegenerator, which can be used to generate DNA damage distributions based on a simple energy-deposition based model, and repairanalysis, which analyzes repair in input SDD files. These are described briefly below.
 
 ## damagegenerator
-----
+
 
 This code implements a simplified model of DNA damage following ionising radiation exposure. This assumes that the average yield of damage within a given volume is proportional to the average energy deposited within that volume, and that these events are randomly distributed. For X-rays this is modelled as simple random damage throughout the nucleus, while for ions this is modelled based on the energy distribution around tracks passing through the nucleus. Damage is flagged as either 'simple' or 'complex' based on a simple probability.
 
@@ -39,7 +38,7 @@ The full argument list for generateExposure is:
 These commands will generate SDD files containing the resulting DSB distribution. By default, only the spatial information is meaningful in these data, so the files by default are output in a minimal SDD format, excluding fields which relate to data which are not simulated in this model. Optionally, 'writeSparse' in damageModel.py can be set to false, which will write a fully-detailed SDD file with synthetic data for other features. This may be useful for testing purposes, but should not be taken as biologically meaningful.
 
 ## repairanalysis
-----
+
 This code implements the MEDRAS repair model for a set of input SDD files. In this approach, the code extracts DSB distributions per exposure from the SDD files, and probabalistically simulates their repair, modelling the stochastic rejoining of different DSB ends. This simulation tracks the yield of misrepaired breaks, and is capable of further sub-analysis including yields of chromosome aberrations, fragment loss, and spatial distributions of misrepair. Several example analyses are available by default. 
 
 `repairanalysis` can be called as follows:
@@ -63,7 +62,7 @@ Each of the three options presents a different sub-analysis of the results of re
 
 ### Fidelity
 
-Fidelity (the default approach) summarises the number of breaks, probability of misrepair, and rate of inter-chromosome events when repair is simulated. These will be listed for each individual row as the model proceeds, and then summary data will be presented showing average rates across the whole dataset, as well as data on the kinetics of misrepair. This can either be the time taken to clear DNA DSB repair foci (if `addFociDelay` is true in medrasrepair.py) or simply the time for physical break rejoining (if `addFociDelay` is false). The former option provides better agreemenent with foci data such as γH2AX or 53BP1 analysis, while the latter option provides better agreement with physical measures of DSB repair such as Pulsed Field Gel Electrophoresis. 
+Fidelity (the default approach) summarises the number of breaks, probability of misrepair, and rate of inter-chromosome events when repair is simulated. These will be listed for each individual row as the model proceeds, and then summary data will be presented showing average rates across the whole dataset, as well as data on the kinetics of misrepair. This can either be the time taken to clear DNA DSB repair foci (if `addFociDelay` is true in medrasrepair.py) or simply the time for physical break rejoining (if `addFociDelay` is false). The former option provides better agreement with foci data such as γH2AX or 53BP1 analysis, while the latter option provides better agreement with physical measures of DSB repair such as Pulsed Field Gel Electrophoresis. 
 
 ### Separation
 
@@ -76,7 +75,7 @@ The misrepair spectrum analysis calculates the types of misrepair event which re
 In addition, if `doPlot` is set to true, the model will also generate an mFISH-style plot of the resulting chromosome distribution for each simulated repair, to give a visual illustration of the resulting chromosome alterations.
 
 ## Requirements
-----
+
 
 This code is written in python3, and requires the following libraries:
 
@@ -86,12 +85,12 @@ This code is written in python3, and requires the following libraries:
 - matplotlib
 
 ## Contacts
------
+
 
 For questions/comments/bug reports, please contact stephen.mcmahon (at) qub.ac.uk
 
 ## References
-----
+
 [McMahon2017]	McMahon, S. J., McNamara, A. L., Schuemann, J., Paganetti, H., & Prise, K. M. (2017). A general mechanistic model enables predictions of the biological effectiveness of different qualities of radiation. Scientific Reports, 7(1), 688. http://doi.org/10.1038/s41598-017-10820-1
 
 [McMahon2016]	McMahon, S. J., Schuemann, J., Paganetti, H., & Prise, K. M. (2016). Mechanistic Modelling of DNA Repair and Cellular Survival Following Radiation-Induced DNA Damage. Scientific Reports, 6, 33290. http://doi.org/10.1038/srep33290

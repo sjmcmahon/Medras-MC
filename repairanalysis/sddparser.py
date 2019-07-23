@@ -72,11 +72,16 @@ def parseChromosomes(chromosomeVals):
     return [int(chromosomeVals[0]),list(map(float,chromosomeVals[1:]))]
 
 def parsePosition(posString):
-    posVals = list(map(float,posString.split(',')))
-    return [posVals[0:3],posVals[3:6],posVals[6:]]
+    posGroups = posString.split('/') # Split into up to three groups of coordinates 
+                                     # (Centre and 2x bounding XYZ sets)
+    posVals = [ list(map(float,s.split(','))) for s in posGroups] # Split each into XYZ
+    posVals = posVals + [ [] ]*(3-len(posVals))                   # Pad as needed
+    return posVals
 
 def parseProliferation(prolifString):
-    return [int(prolifString[0]), prolifString[1]]
+    if len(prolifString)>1:
+        return [int(prolifString[0]), prolifString[1] ]
+    return [int(prolifString[0]), [] ]
 
 # General array parser - parse value A using specificed function.
 # We use try/except block to catach a few different possible line formats
