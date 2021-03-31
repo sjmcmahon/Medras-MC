@@ -43,9 +43,9 @@ from . import misrepaircalculator as calcMR
 from . import analyzeAberrations
 
 # Input parameters common to different processes
-sigma = 0.048526     # Misrepair range, as fraction of nuclear radius
-maxExposures = 100	 # Maximum exposures per file to simulate
-repeats = 10		 # Number of repeats for each exposure
+sigma = 0.04187 # Misrepair range, as fraction of nuclear radius
+maxExposures = 1000  # Maximum exposures per file to simulate
+repeats = 50		 # Number of repeats for each exposure
 minMisrepSize = 0 	 # Neglect misrepair events separated by less than this genetic distance (MBP)
 
 # Options for fidelity repair output
@@ -57,6 +57,7 @@ kineticLimit = 25 	 # Hours, maximum time for repair kinetics
 # Options for misrepair spectrum output
 doPlot = True
 allFragments = False
+listAcentrics = False
 simulationLimit = 24 # Hours, time at which to simulate misrepair
 
 # Method to sort files nicely with numbers.
@@ -92,6 +93,16 @@ def prepareDamage(misrepairList, remainingBreaks, chromosomes):
 
 	return trimMisrep, trimBreaks
 
+def listAcentricSizes(baseChromosomes, finalChromosomes,pos=0.5):
+	fullChroms = analyzeAberrations.characteriseChroms(finalChromosomes)
+	print('\n\nAcentric sizes:')
+	for c in fullChroms:
+		centromereCount = analyzeAberrations.centricCount(c,baseChromosomes,pos)
+
+		if centromereCount==0:
+			theSize = sum( abs(f[1]-f[2]) for f in c[3])
+			print(theSize)
+
 def misrepairSpectrum(fileData, header, fileName):
 	allBreaks, scaledSigma, meanE, complexity, complexitySd, dose, emptySets = fileData
 	radius = scaledSigma/sigma
@@ -107,6 +118,8 @@ def misrepairSpectrum(fileData, header, fileName):
 	noChroms = header['Chromosomes'][0]
 	baseChromosomes = [[n,0,header['Chromosomes'][1][n] ] for n in range(noChroms) ]
 	fullFrags = []
+	allChroms = []
+	allRings = []
 	for m,breakList in enumerate(allBreaks):
 		if m>=maxExposures:
 			break
@@ -120,6 +133,10 @@ def misrepairSpectrum(fileData, header, fileName):
 
 		frags = [f+[m] for f in frags]
 		fullFrags += frags
+		allChroms = allChroms + chroms 
+		allRings = allRings + rings 
+	if listAcentrics:
+		listAcentricSizes(baseChromosomes, allChroms+allRings)
 
 	return None
 
@@ -200,7 +217,7 @@ def repairFidelity(fileData, header, fileName):
 		print(mean,'\t', stdevRate,'\t',interChromRate, end='')
 		#print('\t\t','\t'.join(map(str,[analyticMisrep, etaSum])), end='')
 		if writeAllKinetics:
-			print('\t\t', '\t'.join(map(str, repairsToKinetic(repTimes))), end='')
+			print('\t\t', summariseKinetics(repTimes), end='')
 		print()
 	print()
 
@@ -248,7 +265,7 @@ def misrepairSeparation(fileData,header,fileName):
 	misrepairSeps = []
 	for m,breakList in enumerate(breaks):
 		for n in range(repeats):
-			misrepList,repList = calcMR.singleRepair(copy.deepcopy(breakList), None, scaledSigma)
+			misrepList,repList, remBreaks = calcMR.singleRepair(copy.deepcopy(breakList), None, scaledSigma)
 			misrepairSeps+=[m[2] for m in misrepList]
 
 	if len(misrepairSeps)>0:
@@ -259,13 +276,136 @@ def misrepairSeparation(fileData,header,fileName):
 
 ###################
 #
+# DSB separation calculator
+# 
+###################
+def dsbSeparation(fileData,header,fileName):
+	# Initialise some shared values
+	bins = 500
+	breaks, scaledSigma, meanE, complexity, complexitySd, dose, emptySets = fileData
+	radius = scaledSigma/sigma
+	maxSeparation = 2*radius
+	rBins = [n*(maxSeparation*1.0/bins) for n in range(bins+1)]
+
+	# For first run, print header
+	global separationRun
+	if separationRun is False:
+		separationRun = True
+		print('File\tBreakSets\tEmptySets\tSeparation (um):\t', end=' ')
+		print('\t'.join(map(str,rBins)))
+
+	print(fileName,'\t',len(breaks),'\t',emptySets,'\t',fileName,'\t', end=' ')
+	seps = []
+	for m, breakList in enumerate(breaks):
+		#print(m,breakList)
+		for i in range(0,len(breakList),2):
+			for j in range(i+2,len(breakList),2):
+				seps.append(np.sqrt(calcMR.distanceToSq(breakList[i][1],breakList[j][1])))
+				#if np.sqrt(calcMR.distanceToSq(breakList[i][1],breakList[j][1]))<0.01:
+				#	print(i,j)
+
+	if len(seps)>0:
+		print('\t'.join(map(str, np.histogram(seps, rBins, density=True)[0]))) 
+	else:
+		print()	
+
+	return None
+
+###################
+#
+# Radial damage separation calculator
+# 
+###################
+radialRun = False
+def radialDSBs(fileData,header,fileName):
+	# Initialise some shared values
+	bins = 1600
+	breaks, scaledSigma, meanE, complexity, complexitySd, dose, emptySets = fileData
+	radius = scaledSigma/sigma
+	maxSeparation = 4.0
+	rBins = [n*(maxSeparation*1.0/bins) for n in range(bins+1)]
+
+	# For first run, print header
+	global radialRun
+	if radialRun is False:
+		radialRun = True
+		print('File\tBreakSets\tEmptySets\tSeparation (um):\t', end=' ')
+		print('\t'.join(map(str,rBins)))
+
+	print(fileName,'\t',len(breaks),'\t',emptySets,'\t',fileName,'\t', end=' ')
+	seps = []
+	for m, breakList in enumerate(breaks):
+		for i in range(len(breakList)):
+			#print('\t'.join(map(str,breakList[i][1])))
+			seps.append(np.sqrt(pow(breakList[i][1][0],2)+pow(breakList[i][1][1],2)))
+	if len(seps)>0:
+		print('\t'.join(map(str, np.histogram(seps, rBins, density=True)[0]))) 
+	else:
+		print()	
+
+	return None
+
+###################
+#
+# Output damage by track
+# 
+###################
+trackRun = False
+def trackBreaks(fileData,header,fileName):
+	# Initialise some shared values
+	breaks, scaledSigma, meanE, complexity, complexitySd, dose, emptySets = fileData
+	radius = scaledSigma/sigma
+
+	# For first run, print header
+	global radialRun
+	if radialRun is False:
+		radialRun = True
+		print('File\tBreak count\tBreaks')
+
+	totalTracks = 0
+	totalBreaks = 0
+	for m, breakList in enumerate(breaks):
+		breakCount = 0
+		for i in range(len(breakList)):
+			if breakList[i][0]!=lastTrack:
+				if lastTrack!=-1:
+					print(fileName,lastTrack,breakCount)
+					totalTracks+=1
+					totalBreaks+=breakCount
+				lastTrack = breakList[i][0]
+				breakCount = 1
+			else:
+				breakCount+=1
+
+		if lastTrack!=-1:
+			print(fileName,lastTrack,breakCount)
+
+
+	# print(fileName,'\t',len(breaks),'\t',emptySets,'\t',fileName,'\t', end=' ')
+	# seps = []
+	# for m, breakList in enumerate(breaks):
+	# 	for i in range(len(breakList)):
+	# 		#print('\t'.join(map(str,breakList[i][1])))
+	# 		seps.append(np.sqrt(pow(breakList[i][1][0],2)+pow(breakList[i][1][1],2)))
+	# if len(seps)>0:
+	# 	print('\t'.join(map(str, np.histogram(seps, rBins, density=True)[0]))) 
+	# else:
+	# 	print()	
+	retString = "\t".join(map(str,[fileName,totalTracks,totalBreaks,totalBreaks/totalTracks]))
+	return retString
+
+###################
+#
 # Simulation wrapper
 # 
 ###################
 def repairSimulation(folder, analysisFunction='Fidelity', verbose=False):
 	functions = [ ['Fidelity',repairFidelity],
 				  ['Separation',misrepairSeparation],
-				  ['Spectrum',misrepairSpectrum] ]
+				  ['Spectrum',misrepairSpectrum],
+				  ['DSBSeparation',dsbSeparation],
+				  ['DSBRadial', radialDSBs],
+				  ['TrackBreaks', trackBreaks] ]
 	summaries=[]
 	timeSummary = []
 

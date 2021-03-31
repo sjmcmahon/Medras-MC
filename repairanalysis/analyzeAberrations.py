@@ -98,7 +98,7 @@ def centricCheck(baseChromosomes, finalChromosomes,pos=0.5):
 
 		if centromereCount==0:
 			acentric+=1
-			if sum( abs(f[1]-f[2]) for f in c[3])>3:
+			if sum( abs(f[1]-f[2]) for f in c[3])> largeMisrepThreshold:
 				largeLoss+=1
 		if centromereCount==1:
 			normal+=1
@@ -237,8 +237,8 @@ def checkHeader(initialBreaks=None, headerPrint=[False]):
 	headerPrint[0] = True
 	print('Index\tBreaks\tResidual\tMisrepairs\tLarge Misrepairs\tInter-Chromosome Misrepairs\t'
 		  'Single-Junction Chromosomes\tMulti-Junction Chromosomes\tNormal Chromosomes\t'
-		  'Acentric Linear\tMulti-Centric\tLarge Loss\tCentric Ring\tAcentric Ring\t'
-		  'Multi-Centric Ring\tLarge Loss', end='')
+		  'Acentric Linear\tMulti-Centric\tLarge Linear Fragment\tCentric Ring\tAcentric Ring\t'
+		  'Multi-Centric Ring\tLarge Ring Fragment', end='')
 	if initialBreaks is not None:
 		print('\tInitial DNA Fragmentation\tPotential DNA loss', end='')
 	print()
@@ -306,7 +306,7 @@ def doRepair(chromosomes, repairs, remBreaks=None, index=0, breaks=-1, baseBreak
 		
 	print()
 
-	return chromList,rings, lostFragments
+	return chromList, rings, lostFragments
 
 
 #######################################################

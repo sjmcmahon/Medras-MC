@@ -145,7 +145,7 @@ def XRayHits(DSBCount = 1.0,radius=1.0):
 
 	# For each break, generate X,Y, Z positon randomly
 	retBreaks = []
-	for comp,breaks in enumerate(breakCounts):
+	for dsb,breaks in enumerate(breakCounts):
 		for n in range(breaks):
 			phi = 2*math.pi*random.random()
 			theta = math.acos(random.uniform(-1,1))
@@ -156,7 +156,8 @@ def XRayHits(DSBCount = 1.0,radius=1.0):
 			x = r*math.sin(theta)*math.cos(phi)
 			y = r*math.sin(theta)*math.sin(phi)
 			z = r*math.cos(theta)
-			retBreaks.append( [x,y,z,comp,1] )
+			retBreaks.append( [x,y,z,dsb,1] )
+
 	return retBreaks
 
 # Generate damage distributed around an ion track
@@ -201,7 +202,7 @@ def ionHits(DSBCount=1.0,radius=1.0,LETdata=None,EPerDSB=60.1, fixedTracks=None,
 
 		# For each break, position randomly along track length, and sample radial position from
 		# track data file.
-		for comp,breaks in enumerate(breakCounts):
+		for dsb,breaks in enumerate(breakCounts):
 			for n in range(breaks):
 				zPos = 2*(0.5-np.random.uniform())*radius
 
@@ -214,7 +215,7 @@ def ionHits(DSBCount=1.0,radius=1.0,LETdata=None,EPerDSB=60.1, fixedTracks=None,
 
 				# Make sure that sampled hit actually remains within the nucleus
 				if xPos*xPos + yPos*yPos + zPos*zPos < radius*radius:
-					retBreaks.append([xPos,yPos,zPos,comp,newEvent])
+					retBreaks.append([xPos,yPos,zPos,dsb,newEvent])
 					newEvent = 0
 					rList.append(dr)
 					if dr<0.05:
@@ -227,82 +228,159 @@ def ionHits(DSBCount=1.0,radius=1.0,LETdata=None,EPerDSB=60.1, fixedTracks=None,
 			                          for r in np.arange(0,4,0.0025)))))
 	return retBreaks
 
+# Take a list of positions and complexities, and format them into full breaks
+def formatBreaks(breakPositions,radius=1.0, bdRange=-1, letData=None, particleTypes="2212", 
+	             timeProfile = None, firstField = True):
+	newHits = []
+	eventNo=0
+	# For each position, generate break characteristics
+	for pos in breakPositions:
+		x,y,z,dsb,newEvent = pos
+
+		# Increment counter if it's a new event and set particle time
+		if newEvent>0: 
+			eventNo+=1
+			if timeProfile==None:
+				pTime = 0
+			else:
+				pTime = timeProfile[0] + random.random()*timeProfile[1]
+
+		# If hit list is empty and this is the first field, this is a new exposure
+		if firstField and newHits==[]:
+			newEvent = 2
+			eventNo = 0 #Reset to zero for new exposure
+
+		# Build 3D break extent
+		breakExtent  = [x,y,z,x+0.01,y+0.01,z+0.01,x-0.01,y-0.01,z-0.01]
+		extentString = (toCSV(breakExtent[0:3])+ '/'+toCSV(breakExtent[3:6])+'/'+
+					    toCSV(breakExtent[6:9]) )
+
+		# Set break type
+		if dsb==0:
+			breakType = [0,1,0]
+		else:
+			if random.random()>DSBComplexity:
+				breakType = [0,0,1]
+			else:
+				breakType = [0,1,1]
+
+		# Set cause through random assignment
+		if random.random()>directFrac:
+			cause = 1
+		else:
+			cause = 0
+
+		# Sample chromosome, and generate illustrative damage structure
+		chromID, chromPos = chromModel.modelChromosome(x,y,z)
+		damageString,baseString,fullBreakType = generateDmgandBase(breakType)
+
+		# Set BDs to 0 if we're not logging those
+		if bdRange<0: fullBreakType[0]=0
+
+		# Placeholder values for other parameters if a full output is requested
+		time = str(random.random()*2.0)
+		energies = letData[2]
+		trans = [x,y,-radius]
+		direction = [0,0,0]
+
+		# Append hit data, either in minimal or comprehensive format
+		if writeSparse:
+			newHits.append([toCSV([newEvent,eventNo],','), toCSV([x,y,z],', '), 
+								toCSV(fullBreakType)])
+		else:
+			newHits.append([toCSV([newEvent,eventNo],','),extentString, chromID, 
+				                chromPos, cause, toCSV(fullBreakType), damageString, baseString,
+				                time, particleTypes, energies, toCSV(trans,'/'), 
+				                toCSV(direction,'/'), pTime])
+	return newHits
+
+def simFromFile(posFile, chromosomes=46, letData = [1, None, 1.0], incident ="2212", dose=-1):
+	with open(posFile) as inFile:
+		# Get initial radius and prep average chromosomes
+		inputRow = inFile.readline()
+		while inputRow[0]=='#': inputRow = inFile.readline()
+		radiusData = [float(r) for r in inputRow.strip().split('\t')]
+		meanRadius = pow(np.product(radiusData),1/len(radiusData))
+		chromModel.subDivideSphere(chromosomes,meanRadius)
+
+		allBreaks = []
+		breakPositions = []
+		for row in inFile:
+			row = row.strip()
+			# Blank lines delimit new exposures
+			if len(row)==0:
+				if len(breakPositions)>0: allBreaks.append(breakPositions)
+				breakPositions = []
+				continue
+
+			# Get break position
+			breakPos = [float(r) for r in row.split('\t')]
+			# Append a 1 to denote a DSB, and flag new event as appropriate
+			breakPos.append(1)
+			if len(breakPositions)==0:
+				breakPos.append(2)
+			else:
+				breakPos.append(0)
+			breakPositions.append(breakPos)
+		if len(breakPositions)>0: allBreaks.append(breakPositions)
+
+	outBreaks = []
+	for breakPositions in allBreaks:
+		outBreaks.append(formatBreaks(breakPositions, letData = letData))
+
+	outName = posFile.split('.')[0]+'.sdd'
+	SDDWriter.writeToFile(outBreaks,outName, writeSparse, meanRadius, geometry = [1]+radiusData, 
+						  incident=incident, dose=dose)
+
+
 # Generate hits for a given exposure
-def generateHits(runs, radius=1.0, DSBCount=1, chromosomes=1, 
-			     bdRange=-1, letData=None, particleTypes="2212"):
-	# Generate chromosome model
-	chromModel.subDivideSphere(chromosomes,radius)
+def generateHits(runs=1, radius=1.0, DSBCount=1, chromosomes=1, bdRange=-1, letData=None, 
+				 particleTypes="2212", timeProfile = None, firstField = True):
+	# If this is an entirely new exposure, update chromosome model
+	if firstField: chromModel.subDivideSphere(chromosomes,radius)
 	hitList = []
-	eventNo = 0
 
-	# Iterate over number of repeats
 	for n in range(runs):
-		hitList.append([])
 		breakPositions = ionHits(DSBCount, radius, letData)
+		hitList.append(formatBreaks(breakPositions, radius, bdRange, letData, particleTypes, 
+									timeProfile, firstField))
 
-		# For each position, generate break characteristics
-		for pos in breakPositions:
-			x,y,z,c,newEvent = pos
-
-			# Increment counter if it's a new event
-			if newEvent>0: eventNo+=1
-
-			# If hit list is empty, this is a new exposure
-			if hitList[-1]==[]:
-				newEvent = 2
-				eventNo = 0 #Reset to zero for new exposure
-
-			# Build 3D break extent
-			breakExtent = [x,y,z,x+0.01,y+0.01,z+0.01,x-0.01,y-0.01,z-0.01]
-
-			# Set break type
-			if c==0:
-				breakType = [0,1,0]
-			else:
-				if random.random()>DSBComplexity:
-					breakType = [0,0,1]
-				else:
-					breakType = [0,1,1]
-
-			# Set cause through random assignment
-			if random.random()>directFrac:
-				cause = 1
-			else:
-				cause = 0
-
-			# Sample chromosome, and generate illustrative damage structure
-			chromID, chromPos = chromModel.modelChromosome(x,y,z)
-			damageString,baseString,fullBreakType = generateDmgandBase(breakType)
-
-			# Set BDs to 0 if we're not logging those
-			if bdRange<0: fullBreakType[0]=0
-
-			# Placeholder values for other parameters if a full output is requested
-			time = str(random.random()*2.0)
-			energies = letData[2]
-			trans = [x,y,-5]
-			direction = [0,0,0]
-			pTime = 0
-
-			# Append hit data, either in minimal or comprehensive format
-			if writeSparse:
-				hitList[-1].append([toCSV([newEvent,eventNo],','), toCSV([x,y,z],', '), 
-									toCSV(fullBreakType)])
-			else:
-				hitList[-1].append([toCSV([newEvent,eventNo],','),toCSV(breakExtent,', '), chromID, 
-					                chromPos, cause, toCSV(fullBreakType), damageString, baseString,
-					                time, particleTypes, energies, toCSV(trans,'/'), 
-					                toCSV(direction,'/'), pTime])
 	return hitList
 
 # Generate hits for a requested exposure, and write this data to an SDD-formatted file
 def simExposure(hits, runs, chromosomes, outFile, targetVol, geometry=[1,3,3,3], DNADensity=-1,
 	            bdRange=-1, O2=-1, incident="22", energy=0.1, function="Point", 
-	            grouping="Single Event", letData=None):
+	            grouping="Single Event", letData=None, timeProfile = None):
 	hitData = generateHits(runs, geometry[1], hits, chromosomes, bdRange, 
-						   letData, particleTypes=incident)
+						   letData, particleTypes=incident, timeProfile = timeProfile)
 	SDDWriter.writeToFile(hitData, outFile, writeSparse, targetVol, geometry, DNADensity, bdRange,
 						  O2, incident, energy, hits/DSBPerGy, function, grouping)
+
+# Generate hits for a multi-field exposure, and write this data to an SDD-formatted file.
+# Syntax same as single exposure above, but relevant parameters: hits, incident, letData, and
+# timeProfile should be passed in as lists
+def simMultiExposure(hits, runs, chromosomes, outFile, targetVol, geometry=[1,3,3,3], DNADensity=-1,
+	              bdRange=-1, O2=-1, incident="22", energies=0.1, function="Point", 
+	              grouping="Single Event", letData=None, timeProfile = None):
+	hitData = None
+	for h,let, particle, times in zip(hits,letData,incident,timeProfile):
+		# Just generate hits for first field
+		if hitData == None:
+			hitData = generateHits(runs, geometry[1], h, chromosomes, bdRange, let, 
+								   particleTypes=particle, timeProfile = times)
+		else:
+		# For later fields, need to merge into each run
+			newHits = generateHits(runs, geometry[1], h, chromosomes, bdRange, let, 
+								   particleTypes=particle, timeProfile = times, firstField = False)
+			for n in range(len(hitData)):
+				hitData[n]+=newHits[n]
+
+	# Make sure first event in each exposure is marked as a new exposure (2)
+	for n in range(len(hitData)): hitData[n][0][0]='2'+hitData[n][0][0][1:]
+
+	doses = toCSV([h/DSBPerGy for h in hits])
+	SDDWriter.writeToFile(hitData, outFile, writeSparse, targetVol, geometry, DNADensity, bdRange,
+						  O2, incident, energies, doses, function, grouping)
 
 # Generate PID for different particle types, based on atomic number (Z=0 is gamma)
 def PIDLookup(Z):
@@ -331,7 +409,8 @@ def dataFileNames(Z):
 
 # Generate an exposure for a requested ion, LET, and number of repeats
 def generateExposure(energy, LET, dose, particleZ, runs, targetRadius=4.32, 
-				     chromosomes=46, extraTargetInfo=''):
+				     chromosomes=46, timeProfile = None, extraTargetInfo='',
+				     fileName = None):
 	# Some general model parameters for SDD header
 	DNADensity = 6100/(4.0/3.0*math.pi*pow(refTargRadius,3))
 	geometry = [1,targetRadius,targetRadius,targetRadius]
@@ -342,16 +421,14 @@ def generateExposure(energy, LET, dose, particleZ, runs, targetRadius=4.32,
 	# Set up output file name
 	# Calculate hits by scaling by dose
 	hits = dose*DSBPerGy
-	#if hits%DSBPerGy == 0:
-	#	dose = str(hits/DSBPerGy)
-	#else:
-#		dose = str(round(hits/DSBPerGy,2))
-	fileBase = 'DNA Damage Z='+str(particleZ)+ ' '
-	fileName = fileBase+str(energy)+' MeV '+ str(dose) + ' Gy'
-	if writeSparse:
-		fileName = fileName + ' minimal.txt'
-	else:
-		fileName = fileName + ' full.txt'
+
+	if fileName ==None:
+		fileBase = 'DNA Damage Z='+str(particleZ)+ ' '
+		fileName = fileBase+str(energy)+' MeV '+ str(dose) + ' Gy'
+		if writeSparse:
+			fileName = fileName + ' minimal.txt'
+		else:
+			fileName = fileName + ' full.txt'
 
 	# Get track data for model input
 	letData = None
@@ -362,13 +439,54 @@ def generateExposure(energy, LET, dose, particleZ, runs, targetRadius=4.32,
 	else:
 		letData = [0,None,energy,pow(targetRadius/refTargRadius,3)]
 
-
-
 	# Run simulation
 	print(energy, LET, hits)
 	simExposure(hits, runs, chromosomes, fileName, targetVol, geometry, DNADensity, bdRange,
-				letData=letData, incident=particleID, energy=energy)
+				letData=letData, incident=particleID, energy=energy, timeProfile=timeProfile)
 
+# Generate an exposure for an abtirary set of exposures
+def generateMultiExposure(energies, LETs, doses, particleZs, runs, targetRadius=4.32, 
+				          chromosomes=46, timeProfiles = None, extraTargetInfo='', 
+				          fileName = None):
+	# Some general model parameters for SDD header
+	DNADensity = 6100/(4.0/3.0*math.pi*pow(refTargRadius,3))
+	geometry = [1,targetRadius,targetRadius,targetRadius]
+	targetVol = str(targetRadius)+' um spherical nucleus'
+	particleID = [PIDLookup(z) for z in particleZs]
+	bdRange = -1 # Don't record base damages
+
+	# Set up output file name
+	# Calculate hits by scaling by dose
+	hits = [d*DSBPerGy for d in doses]
+
+	if fileName ==None:
+		fileBase = 'DNA Damage Zs '+toCSV(particleZs, ' ')+' '
+		fileName = fileBase+toCSV(energies, ' ')+' MeV '+ toCSV(doses, ' ') + ' Gy'
+		if writeSparse:
+			fileName = fileName + ' minimal.txt'
+		else:
+			fileName = fileName + ' full.txt'
+
+	# Get track data for model input
+	letData = []
+	for particleZ, LET, energy in zip(particleZs, LETs, energies):
+		if particleZ>0:
+			trackFile = dataFileNames(particleZ)
+			trackModel.readCumuDoseFile(trackFile)
+			letData.append([LET, trackModel.buildCumCurve(LET), energy, 
+							pow(targetRadius/refTargRadius,3)] )
+		else:
+			letData.append([0, None, energy,
+							pow(targetRadius/refTargRadius,3)] )
+
+	# Run simulation
+	print(energies, LETs, hits)
+	print(fileName)
+	simMultiExposure(hits, runs, chromosomes, fileName, targetVol, geometry, DNADensity, bdRange,
+				     letData=letData, incident=particleID, energies=energies, timeProfile=timeProfiles)
+
+
+# Example application
 # Build a basic X-ray and ion dataset
 def basicXandIon(targetRadius = 4.32, runs = 10, conditions=None, extraTargetInfo = ''):
 	# Photons, doses from 1 to 8 Gy
@@ -376,7 +494,8 @@ def basicXandIon(targetRadius = 4.32, runs = 10, conditions=None, extraTargetInf
 	ionConditions = [[1.0,0,1], [1.0,0,2], [1.0,0,3], [1.0,0,4], 
 					 [1.0,0,6], [1.0,0,8]]
 	for energy, LET, dose in ionConditions:
-		generateExposure(energy, LET, dose, particleZ, runs, targetRadius, chromosomes=46)
+		generateExposure(energy, LET, dose, particleZ, runs, targetRadius, chromosomes=46,
+						 timeProfile = [0,60*1E9*2])
 
 	# Protons, at a dose of 1 Gy 
 	particleZ = 1 
@@ -385,7 +504,8 @@ def basicXandIon(targetRadius = 4.32, runs = 10, conditions=None, extraTargetInf
 				      [3.5, 10.60, 1], [5.5,7.42,1],    [8.5,5.25,1], 
 				      [34,  1.77,  1] ]
 	for energy, LET, dose in ionConditions:
-		generateExposure(energy, LET, dose, particleZ, runs, targetRadius, chromosomes=46)
+		generateExposure(energy, LET, dose, particleZ, runs, targetRadius, chromosomes=46,
+						 timeProfile = [0,60*1E9*2])
 
 	# Carbon ions, at a dose of 1 Gy
 	particleZ = 6
@@ -393,5 +513,6 @@ def basicXandIon(targetRadius = 4.32, runs = 10, conditions=None, extraTargetInf
 					  [185,100,   1], [360,60,1], [960,26,1],
 					  [1200,20.29,1] ]
 	for energy, LET, dose in ionConditions:
-		generateExposure(energy, LET, dose, particleZ, runs, targetRadius, chromosomes=46)
+		generateExposure(energy, LET, dose, particleZ, runs, targetRadius, chromosomes=46,
+						 timeProfile = [0,60*1E9*2])
 		

@@ -45,7 +45,6 @@ import time
 # Physical DSB interaction rates, based on break complexity (per hour)
 fastRate = 2.07
 slowRate = 0.259
-relSlow = slowRate/fastRate
 
 # Foci clearance rates (per hour)
 fastFoci = 8.12
@@ -71,77 +70,120 @@ def logInteractionRate(p1,p2,sigma):
 def buildRateTable(baseBreaks,sigma):
 	sigmaSq = 2*sigma*sigma
 	positions = np.array([b[1] for b in baseBreaks])
-	distances = scipy.spatial.distance.cdist(positions,positions)
-	rateTable = np.maximum(np.exp(-np.power(distances,2)/sigmaSq),1E-200)
-	positions = None
-	distances = None
-	complexity = np.array([[max(a[2],b[2]) for b in baseBreaks] for a in baseBreaks])
-	rateTable = rateTable*np.power(relSlow,complexity)
-	complexity = None
+	seps = scipy.spatial.distance.pdist(positions)
+	seps = scipy.spatial.distance.squareform(seps)
+	rateTable = np.exp(-(seps*seps)/sigmaSq)
+	rateTable = np.clip(rateTable, 1E-200, None)
+	np.fill_diagonal(rateTable,0)
+
 	return rateTable
 
+# Pick a repair based on random sampling from weights
+def pickRepair(interactionArray,n):
+	cumuInteraction = np.cumsum(interactionArray)
+	interactionSample = np.random.uniform()*cumuInteraction[-1]
+	offsetInteraction = cumuInteraction-(interactionSample)
+	chosenInteraction = np.where(offsetInteraction>=0)[0][0]
+
+	return chosenInteraction
+
 def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
+	# Sort breaks by order of creation in time, set up rates if needed
+	breakList.sort(key = lambda x:x[7])
 	if rateTable is None: rateTable=buildRateTable(breakList,sigma)
 
-	# Calculate MC interaction rates, as -ln(rand())/interactionRate
-	pairRates = [[i,j,-np.log(random.random())/rateTable[i][j] ] 
-				 for i in range(len(breakList)) for j in range(i+1,len(breakList)) 
-				 if rateTable[i][j]>1E-6 ]
+	# Get fast/slow kinetic data from breaklist
+	repairRate = np.array([fastRate/2 if b[2]==0 else slowRate/2 for b in breakList])
 
-	# Sort backwards, pop from end for efficiency
-	pairRates.sort(key=lambda x: -x[2])
-	totalBreaks = len(breakList)*0.5
-	totalDSBs   = len(breakList)*0.5
-	misrepBreaks = 0.0
+	# Sample interaction time for every break
+	interactionSamples = -np.log(np.random.rand(len(breakList)))
 
+	# Get base time, and initialise lists of live and pending breaks
+	baseTime = breakList[0][7]
+	liveBreaks = [n for n,b in enumerate(breakList) if b[7]<=baseTime]
+	pendingBreaks = [n for n,b in enumerate(breakList) if b[7]>baseTime]
+	lastBreak = liveBreaks[-1]
+	if len(pendingBreaks)>0:
+		nextBreakTime = breakList[pendingBreaks[0]][7]
+	else:
+		nextBreakTime = np.inf
+
+	# Reporting variables
 	repairEvents = []
 	misrepairedPairs = []
 
-	# For each sorted pair, if they still exist, record the repair
-	while totalBreaks>0 and len(pairRates)>0:
-		p1,p2,t = pairRates.pop()
-		if t>finalTime: break
+	# Simulate repair until no more breaks remain, or we exceed the simulation limit
+	while len(liveBreaks)+len(pendingBreaks)>0:
+		if len(liveBreaks)>0:
+			# For every break, baseline rate is repair rate divided by total interaction with all DSB ends.
+			rateSums = np.sum(rateTable[:,0:lastBreak+1],axis=1)
+			interactionTimes = np.array(interactionSamples)[liveBreaks]/(repairRate[liveBreaks]*rateSums[liveBreaks])
+			nextTime = baseTime+min(interactionTimes)
+		else:
+			nextTime = nextBreakTime
 
-		if breakList[p1]!=0 and breakList[p2]!=0:
-			complexity = max(breakList[p1][2],breakList[p2][2])
-			if breakList[p1][0]!=breakList[p2][0]:
-				misrepBreaks+=2
-				if (breakList[p1][3][1]==breakList[p2][3][1] and 
-					breakList[p1][3][2]==breakList[p2][3][2]):
+		# Break loop if next event is after the simulation end
+		if min(nextTime, nextBreakTime)> finalTime: break
+
+		# If next repair is before next break, log the repair and remove the break ends
+		if nextTime < nextBreakTime:
+			# Get repaired break ends based on matching repair time, then select a pair
+			endOne = liveBreaks[np.where(interactionTimes==nextTime)[0][0]]
+			endTwo = pickRepair(rateTable[endOne,0:lastBreak+1],endOne)
+
+			# Assign complexity for foci clearance based on most complex end
+			complexity = max(breakList[endOne][2],breakList[endTwo][2])
+
+			# Identify type of repair, and log details
+			if breakList[endOne][0]!=breakList[endTwo][0]:
+				# If ends aren't from the same break, then it's a misrepair. Log details. 
+				if (breakList[endOne][3][1]==breakList[endTwo][3][1] and 
+					breakList[endOne][3][2]==breakList[endTwo][3][2]):
 					interChrom = 0
 				else:
 					interChrom = 1
-				separation = np.sqrt(distanceToSq(breakList[p1][1], breakList[p2][1]))
-				misrepairedPairs.append([breakList[p1], breakList[p2], separation, interChrom])
+				separation = np.sqrt(distanceToSq(breakList[endOne][1], breakList[endTwo][1]))
+				misrepairedPairs.append([breakList[endOne], breakList[endTwo], separation, interChrom])
 
- 				# Track if either of these are the second repair from a DSB. Log if so
-				p1Partner = p1 +1 - 2*(p1%2)
-				if breakList[p1Partner] == 0:
-					totalDSBs-=1
-					repairEvents.append([t/fastRate,p1,p2,complexity])
-
-				p2Partner = p2 +1 - 2*(p2%2)
-				if breakList[p2Partner] == 0:
-					totalDSBs-=1			
-					repairEvents.append([t/fastRate,p1,p2,complexity])
+ 				# Track if either end is the second end from a DSB. Log reduction in breaks if so
+				p1Partner = endOne +1 - 2*(endOne%2)
+				if breakList[p1Partner] == 0: repairEvents.append([nextTime,endOne,endTwo,complexity])
+				p2Partner = endTwo +1 - 2*(endTwo%2)
+				if breakList[p2Partner] == 0: repairEvents.append([nextTime,endOne,endTwo,complexity])
 
 			else:
-				# Matched DSB ends always clear 1 DSB
-				totalDSBs-=1
-				repairEvents.append([t/fastRate,p1,p2,complexity])
+				# Matched DSB ends always clear 1 DSB, no misrepair
+				repairEvents.append([nextTime,endOne,endTwo,complexity])
 
-			# Tidy up breaklist
-			breakList[p1]=0
-			breakList[p2]=0
-			totalBreaks-=1
+			# Tidy up break data
+			liveBreaks.pop(liveBreaks.index(endOne))
+			liveBreaks.pop(liveBreaks.index(endTwo))
+			rateTable[:,endOne]=0
+			rateTable[:,endTwo]=0
+			breakList[endOne]=0
+			breakList[endTwo]=0
+		else:
+			# If next DSB is before next repair, add pending DSBs and update interactions
+			baseTime = nextBreakTime
+			liveBreaks.append(pendingBreaks.pop(0))
 
-	# Return a list of unrepaired breaks, if we aborted before all were repaired
+			while len(pendingBreaks)>0 and baseTime>=breakList[pendingBreaks[0]][3]:
+				liveBreaks.append(pendingBreaks.pop(0))
+			interactionSamples = -np.log(np.random.rand(len(breakList)))
+			if len(pendingBreaks)>0:
+				nextBreakTime = breakList[pendingBreaks[0]][3]
+			else:
+				nextBreakTime = np.inf
+			lastBreak = liveBreaks[-1]
+
+	# Return a list of unrepaired breaks, if we halted before all were repaired
 	if finalTime<np.inf:
 		remBreaks = [b for b in breakList if b!=0]
 		return misrepairedPairs, repairEvents, remBreaks
 
 	# Otherwise, clean up any breaks which were missed and return 'full' repair
-	if totalBreaks>0:
+	# This is an effectively random pairing, but should hopefully just be tidying up corner cases
+	if len(liveBreaks)+len(pendingBreaks)>0:
 		remBreaks = [p for p in range(len(breakList)) if breakList[p]!=0]
 		while len(remBreaks)>0:
 			p1 = remBreaks.pop()
@@ -150,7 +192,7 @@ def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
 			misrepairedPairs.append([breakList[p1],breakList[p2],-1,0])
 
 	# Otherwise just return 'full' repair
-	return misrepairedPairs, repairEvents
+	return misrepairedPairs, repairEvents, []
 
 # Full repair in single pass.
 def fullRepair(baseBreaks, sigma, repeats=1, addFociClearance=True, radius=1, 
@@ -164,7 +206,7 @@ def fullRepair(baseBreaks, sigma, repeats=1, addFociClearance=True, radius=1,
 	for n in range(repeats):
 		pairRates = []
 		breakList = copy.deepcopy(baseBreaks)
-		misrepairedPairs, repairEvents = singleRepair(breakList,rateTable)
+		misrepairedPairs, repairEvents, remBreaks = singleRepair(breakList,rateTable.copy())
 		
 		# Filter out any intra-chromosome breaks below size limit
 		if sizeLimit>=0 and chromSizes is not None:

@@ -105,6 +105,8 @@ def parseToBreaks(fileName,sig,r_sep = 0.0001,basicStats=False,verbose=False):
                 totalBreaks+=1
 
                 pos = np.array(e['Pos'][0])
+                if len(pos)>3: pos = pos[0:3]
+                
                 pos2 = pos + makePoint(r_sep)
                 if sum(e['Damage Types'][0:2])>2:
                     complexBreak = 1
@@ -128,9 +130,21 @@ def parseToBreaks(fileName,sig,r_sep = 0.0001,basicStats=False,verbose=False):
                         maxChrom=chromID[1]
                 if 'Chromosome Position' in e:
                     chromPos = e['Chromosome Position']
-                # Break is: Index, position, complexity, chromosome ID, upstream/downstream, and new event status
-                breaks[-1]+=[[index,pos,complexBreak,chromID[:],chromPos,-1,newEventStatus],
-                             [index,pos2,complexBreak,chromID[:],chromPos,1,0]]
+
+                # Calculate damage time, cast to hours
+                if('Lesion Time' in e and 'Particle Time' in e):
+                    damageTime = (min(e['Lesion Time'])+min(e['Particle Time']))/(60*60*1E9)
+                else:
+                    damageTime = 0
+
+                if 'Cause' in e: 
+                    cause = e['Cause']
+                else:
+                    cause = 0
+
+                # Break is: Index, position, complexity, chromosome ID, upstream/downstream, new event status, time and cause.
+                breaks[-1]+=[[index,pos,complexBreak,chromID[:],chromPos,-1,newEventStatus, damageTime, cause],
+                             [index,pos2,complexBreak,chromID[:],chromPos,1,0, damageTime, cause]]
                 index+=1
                 newEventStatus=0
         complexities.append(complexity)

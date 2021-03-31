@@ -76,7 +76,6 @@ In addition, if `doPlot` is set to true, the model will also generate an mFISH-s
 
 ## Requirements
 
-
 This code is written in python3, and requires the following libraries:
 
 - numpy
@@ -84,8 +83,15 @@ This code is written in python3, and requires the following libraries:
 - openpyxl
 - matplotlib
 
-## Contacts
+## Update history
 
+21/03/31: Extensive revision to update code and bring into better agreement with analytic model. Key changes:
+- New repair kinetic model, more accurately reproducing structure of analytic model, particularly regarding misrepair range;
+- A number of updates to repair analysis options to enable a number of new analyses to be performed on SDD files;
+- Minor tweaks to SDD writer to clarify code and ensure compliance with SDD format;
+- A number of minor improvements to output clairy
+
+## Contacts
 
 For questions/comments/bug reports, please contact stephen.mcmahon (at) qub.ac.uk
 
