@@ -167,11 +167,16 @@ def ionHits(DSBCount=1.0,radius=1.0,LETdata=None,EPerDSB=60.1, fixedTracks=None,
 	if LET==0:
 		return XRayHits(DSBCount,radius)
 
-	# Calculate hits per track, and number of tracks
+	# Calculate hits per track as it passes from -radius to +radius. 
+	# Pad beam radius to target radius + 99% track radius
 	EPerDSB = EPerDSB*EScaling
 	DSBPerTrack = (LET/EPerDSB)*(2.0*radius)
+	padding = trackModel.sampleRadialPos(0.99,radialData)
 
-	trackEstimate = DSBCount/(DSBPerTrack*2.0/3.0)
+	# Estimate mean number of tracks needed to deposit target number of hits in nucleus
+	# Determined using ratio of nucleus volume to whole exposed cylinder
+	trackEstimate = DSBCount/(DSBPerTrack * (4/3*np.pi*radius*radius)/(2*np.pi*pow(radius+padding,2)))
+
 	if fixedTracks is None:
 		actualTracks = np.random.poisson(trackEstimate)
 	else:
@@ -180,13 +185,14 @@ def ionHits(DSBCount=1.0,radius=1.0,LETdata=None,EPerDSB=60.1, fixedTracks=None,
 	# Generate damage by track
 	retBreaks = []
 	coreBreaks = 0
-	rList = []		
+	rList = []
+
 	for m in range(actualTracks):
 		newEvent = 1
 
-		# Calculate X,Y position where track arrives
+		# Calculate X,Y position where track arrives. Use target radius + 99% track radius
 		u = random.random()
-		r = radius*pow(u,1.0/2.0)
+		r = (radius+padding)*pow(u,1.0/2.0)
 		phi = 2*math.pi*random.random()
 		X = r*math.cos(phi)
 		Y = r*math.sin(phi)
