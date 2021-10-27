@@ -44,8 +44,10 @@ DSBComplexity = 0.43
 directFrac = 0.4
 DSBPerGy = 35
 
-# Reference target radius for human cells, to calculate DNA density
-refTargRadius=4.32
+# Reference target radius for human cells, to calculate DNA density and derived energy per DSB
+refTargRadius = 4.229
+refEPerGy     = (4/3*math.pi*pow(refTargRadius,3))*6.242 # in keV, Using 1 Gy = 6.242 keV/um^3
+refEPerDSB    = refEPerGy/DSBPerGy # For these values, this is 56.5 keV
 
 # Should we use the sparse SDD format?
 writeSparse=True
@@ -161,7 +163,7 @@ def XRayHits(DSBCount = 1.0,radius=1.0):
 	return retBreaks
 
 # Generate damage distributed around an ion track
-def ionHits(DSBCount=1.0,radius=1.0,LETdata=None,EPerDSB=60.1, fixedTracks=None, breakStats=False):
+def ionHits(DSBCount=1.0, radius=1.0, LETdata=None, fixedTracks=None, breakStats=False):
 	# If LET is 0, fall back to uniform X-ray distribution
 	LET, radialData, energy, EScaling = LETdata
 	if LET==0:
@@ -169,8 +171,7 @@ def ionHits(DSBCount=1.0,radius=1.0,LETdata=None,EPerDSB=60.1, fixedTracks=None,
 
 	# Calculate hits per track as it passes from -radius to +radius. 
 	# Pad beam radius to target radius + 99% track radius
-	EPerDSB = EPerDSB*EScaling
-	DSBPerTrack = (LET/EPerDSB)*(2.0*radius)
+	DSBPerTrack = (LET/(refEPerDSB*EScaling))*(2.0*radius)
 	padding = trackModel.sampleRadialPos(0.99,radialData)
 
 	# Estimate mean number of tracks needed to deposit target number of hits in nucleus
@@ -229,7 +230,7 @@ def ionHits(DSBCount=1.0,radius=1.0,LETdata=None,EPerDSB=60.1, fixedTracks=None,
 
 	# Print some statistics about break radial positions if requested
 	if breakStats:
-		print(LET, LET/EPerDSB, actualTracks, len(retBreaks), coreBreaks, end=' ')
+		print(LET, LET/(refEPerDSB*EScaling), actualTracks, len(retBreaks), coreBreaks, end=' ')
 		print('\t'.join(map(str,(len([x for x in rList if x>r and x<r+0.0025])*1.0/len(rList) 
 			                          for r in np.arange(0,4,0.0025)))))
 	return retBreaks
@@ -381,8 +382,10 @@ def simMultiExposure(hits, runs, chromosomes, outFile, targetVol, geometry=[1,3,
 			for n in range(len(hitData)):
 				hitData[n]+=newHits[n]
 
-	# Make sure first event in each exposure is marked as a new exposure (2)
-	for n in range(len(hitData)): hitData[n][0][0]='2'+hitData[n][0][0][1:]
+	# Make sure first event in each exposure, assuming something occurs is marked as a new exposure (2)
+	for n in range(len(hitData)): 
+		if len(hitData[n])>0:
+			hitData[n][0][0]='2'+hitData[n][0][0][1:]
 
 	doses = toCSV([h/DSBPerGy for h in hits])
 	SDDWriter.writeToFile(hitData, outFile, writeSparse, targetVol, geometry, DNADensity, bdRange,

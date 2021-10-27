@@ -128,7 +128,7 @@ def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
 		# If next repair is before next break, log the repair and remove the break ends
 		if nextTime < nextBreakTime:
 			# Get repaired break ends based on matching repair time, then select a pair
-			endOne = liveBreaks[np.where(interactionTimes==nextTime)[0][0]]
+			endOne = liveBreaks[np.argmin(interactionTimes)]
 			endTwo = pickRepair(rateTable[endOne,0:lastBreak+1],endOne)
 
 			# Assign complexity for foci clearance based on most complex end
@@ -167,11 +167,12 @@ def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
 			baseTime = nextBreakTime
 			liveBreaks.append(pendingBreaks.pop(0))
 
-			while len(pendingBreaks)>0 and baseTime>=breakList[pendingBreaks[0]][3]:
+			while len(pendingBreaks)>0 and baseTime>=breakList[pendingBreaks[0]][7]:
 				liveBreaks.append(pendingBreaks.pop(0))
+
 			interactionSamples = -np.log(np.random.rand(len(breakList)))
 			if len(pendingBreaks)>0:
-				nextBreakTime = breakList[pendingBreaks[0]][3]
+				nextBreakTime = breakList[pendingBreaks[0]][7]
 			else:
 				nextBreakTime = np.inf
 			lastBreak = liveBreaks[-1]
