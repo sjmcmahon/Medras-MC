@@ -36,7 +36,6 @@
 
 import numpy as np
 import scipy
-import random
 import copy
 
 import time
@@ -88,9 +87,10 @@ def pickRepair(interactionArray,n):
 	return chosenInteraction
 
 def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
-	# Sort breaks by order of creation in time, set up rates if needed
-	breakList.sort(key = lambda x:x[7])
-	if rateTable is None: rateTable=buildRateTable(breakList,sigma)
+	# Sort breaks by order of creation in time and set up interaction rates if needed
+	if rateTable is None: 
+		breakList.sort(key = lambda x:x[7])
+		rateTable=buildRateTable(breakList,sigma)
 
 	# Get fast/slow kinetic data from breaklist
 	repairRate = np.array([fastRate/2 if b[2]==0 else slowRate/2 for b in breakList])
@@ -198,7 +198,8 @@ def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
 # Full repair in single pass.
 def fullRepair(baseBreaks, sigma, repeats=1, addFociClearance=True, radius=1, 
 			   chromSizes=None, sizeLimit=0, finalTime=np.inf):
-	# Build table of interaction rates
+	# Sort breaks in order of time of creation and build table of interaction rates
+	baseBreaks.sort(key = lambda x:x[7])
 	rateTable = buildRateTable(baseBreaks,sigma)
 
 	fullMisrepairPairs = []
@@ -231,7 +232,7 @@ def fullRepair(baseBreaks, sigma, repeats=1, addFociClearance=True, radius=1,
 			else:
 				if complexity>0:
 					repRate = slowFoci
-			fullRepairTimes.append(t-np.log(random.random())/repRate)
+			fullRepairTimes.append(t-np.log(np.random.random())/repRate)
 
 		fullRepairTimes = sorted(fullRepairTimes)
 	else:

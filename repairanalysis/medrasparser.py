@@ -131,11 +131,10 @@ def parseToBreaks(fileName,sig,r_sep = 0.0001,basicStats=False,verbose=False):
                 if 'Chromosome Position' in e:
                     chromPos = e['Chromosome Position']
 
-                # Calculate damage time, cast to hours
-                if('Lesion Time' in e and 'Particle Time' in e):
-                    damageTime = (min(e['Lesion Time'])+min(e['Particle Time']))/(60*60*1E9)
-                else:
-                    damageTime = 0
+                # Calculate damage time, cast to hours. Set individual times to 0 if not provided.
+                lesionTime = min(e['Lesion Time']) if 'Lesion Time' in e else 0
+                particleTime = min(e['Particle Time']) if 'Particle Time' in e else 0
+                damageTime = (lesionTime+particleTime)/(60*60*1E9)
 
                 if 'Cause' in e: 
                     cause = e['Cause']

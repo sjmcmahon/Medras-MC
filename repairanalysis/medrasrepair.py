@@ -195,7 +195,7 @@ def repairFidelity(fileData, header, fileName):
 	outputTimes = []
 	# Analyze each set of breaks
 	for n,breakList in enumerate(breaks):
-		if n>maxExposures: break
+		if n>=maxExposures: break
 		print(fileName+'\t'+str(n),'\t', len(breakList)/2,'\t', end='')
 
 		if len(breakList)<=2 or len(breakList)>20000:
@@ -380,17 +380,6 @@ def trackBreaks(fileData,header,fileName):
 		if lastTrack!=-1:
 			print(fileName,lastTrack,breakCount)
 
-
-	# print(fileName,'\t',len(breaks),'\t',emptySets,'\t',fileName,'\t', end=' ')
-	# seps = []
-	# for m, breakList in enumerate(breaks):
-	# 	for i in range(len(breakList)):
-	# 		#print('\t'.join(map(str,breakList[i][1])))
-	# 		seps.append(np.sqrt(pow(breakList[i][1][0],2)+pow(breakList[i][1][1],2)))
-	# if len(seps)>0:
-	# 	print('\t'.join(map(str, np.histogram(seps, rBins, density=True)[0]))) 
-	# else:
-	# 	print()	
 	retString = "\t".join(map(str,[fileName,totalTracks,totalBreaks,totalBreaks/totalTracks]))
 	return retString
 
