@@ -152,9 +152,9 @@ def parseToBreaks(fileName,sig,r_sep = 0.0001,basicStats=False,verbose=False):
             breaks.pop()
             complexities.pop()
             emptySets+=1
-
-        # Separate out DSBs whose genetic position overlaps
-        separateDSBs(breaks[-1])
+        else:
+            # Separate out DSBs whose genetic position overlaps
+           separateDSBs(breaks[-1])
 
     # Get effective sigma, and dose if provided
     scaledSigma = sig*scipy.stats.gmean(header['Scoring Volume'][1:4])

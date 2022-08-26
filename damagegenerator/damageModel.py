@@ -176,7 +176,7 @@ def ionHits(DSBCount=1.0, radius=1.0, LETdata=None, fixedTracks=None, breakStats
 
 	# Estimate mean number of tracks needed to deposit target number of hits in nucleus
 	# Determined using ratio of nucleus volume to whole exposed cylinder
-	trackEstimate = DSBCount/(DSBPerTrack * (4/3*np.pi*radius*radius)/(2*np.pi*pow(radius+padding,2)))
+	trackEstimate = DSBCount/(DSBPerTrack*EScaling * (4/3*np.pi*radius*radius)/(2*np.pi*pow(radius+padding,2)))
 
 	if fixedTracks is None:
 		actualTracks = np.random.poisson(trackEstimate)

@@ -36,7 +36,7 @@ from . import plotAberrations
 
 minFragment = 0   # MBP, minimum measurable fragment for DNA loss
 maxFragment = 5.7 # MBP, maximum measurable fragment for DNA loss
-largeMisrepThreshold = 3.0 # MBP, Size of 'large' misrepair
+largeMisrepThreshold = 3000000 # BP, Size of 'large' misrepair
 
 #######################################################
 #
@@ -53,7 +53,7 @@ def misrepairStats(misreps, chromosomes):
 		else:
 			chromID = misrep[0][0]
 			chromLength = chromosomes[chromID][2]
-			if abs((chromLength*(misrep[0][1]-misrep[1][1])) )>=largeMisrepThreshold:
+			if abs((misrep[0][1]-misrep[1][1]) )>=largeMisrepThreshold:
 				largeMisrep+=1
 	return str(len(misreps))+"\t"+str(largeMisrep)+"\t"+str(interChrom)
 
@@ -104,7 +104,7 @@ def centricCheck(baseChromosomes, finalChromosomes,pos=0.5):
 			normal+=1
 		if centromereCount>1:
 			multicentric+=1
-	return '\t'.join(map(str,[normal,acentric,multicentric,largeLoss]))
+	return '\t'.join(map(str,[normal,acentric,largeLoss,multicentric]))
 
 # Calculate initial fragment distribution
 def fragmentDistribution(baseChromosomes,breakList):
@@ -237,7 +237,7 @@ def checkHeader(initialBreaks=None, headerPrint=[False]):
 	headerPrint[0] = True
 	print('Index\tBreaks\tResidual\tMisrepairs\tLarge Misrepairs\tInter-Chromosome Misrepairs\t'
 		  'Single-Junction Chromosomes\tMulti-Junction Chromosomes\tNormal Chromosomes\t'
-		  'Acentric Linear\tMulti-Centric\tLarge Linear Fragment\tCentric Ring\tAcentric Ring\t'
+		  'Acentric Linear\tLarge Acentric Fragment\tMulti-Centric\tCentric Ring\tAcentric Ring\t'
 		  'Multi-Centric Ring\tLarge Ring Fragment', end='')
 	if initialBreaks is not None:
 		print('\tInitial DNA Fragmentation\tPotential DNA loss', end='')

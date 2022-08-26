@@ -55,7 +55,7 @@ addFociDelay = True
 kineticLimit = 25 	 # Hours, maximum time for repair kinetics
 
 # Options for misrepair spectrum output
-doPlot = True
+doPlot = False
 allFragments = False
 listAcentrics = False
 simulationLimit = 24 # Hours, time at which to simulate misrepair
@@ -77,14 +77,14 @@ def prepareDamage(misrepairList, remainingBreaks, chromosomes):
 	# Extract same data for remaining breaks
 	trimBreaks = [ [a[3][1],a[4],a[5],a[1]] for a in remainingBreaks]
 
-	# Scale by chromosome sizes
+	# Scale by chromosome sizes, if needed
 	for misrep in trimMisrep:
 		for damage in misrep:
 			chromID = damage[0]
-			damage[1] *= chromosomes[chromID][2]
+			if damage[1]<1: damage[1] *= chromosomes[chromID][2]
 	for damage in trimBreaks:
 		chromID = damage[0]
-		damage[1] *= chromosomes[chromID][2]
+		if damage[1]<1: damage[1] *= chromosomes[chromID][2]
 
 	# Filter out duplicated DNA ends
 	for n in range(len(trimBreaks)-1,0,-1):
@@ -126,6 +126,7 @@ def misrepairSpectrum(fileData, header, fileName):
 		misrepList,repList, remBreaks = calcMR.singleRepair(copy.deepcopy(breakList), None, 
 															scaledSigma, finalTime = simulationLimit)
 		trimMisrep, trimRemBreaks = prepareDamage(misrepList, remBreaks, baseChromosomes)
+
 		chroms, rings, frags = analyzeAberrations.doRepair(baseChromosomes, trimMisrep, 
 			                        remBreaks = trimRemBreaks, index=m, breaks=len(breakList)//2, 
 			                        baseBreaks=breakList, plot = doPlot, allFragments=allFragments, 
@@ -258,18 +259,24 @@ def misrepairSeparation(fileData,header,fileName):
 	global separationRun
 	if separationRun is False:
 		separationRun = True
-		print('File\tBreakSets\tEmptySets\tSeparation (um):\t', end=' ')
+		print('File\tBreakSets\tEmptySets\tBreaks per set\tMisrepairs per set\tSeparation (um):\t', end=' ')
 		print('\t'.join(map(str,rBins)))
 
-	print(fileName,'\t',len(breaks),'\t',emptySets,'\t',fileName,'\t', end=' ')
+	print(fileName,'\t',len(breaks),'\t',emptySets,'\t', end=' ')
 	misrepairSeps = []
+	totBreaks = 0
 	for m,breakList in enumerate(breaks):
+		#print('\n',len(breakList),'\n')
+		if m>=maxExposures:
+			break
+		totBreaks+=len(breakList)
 		for n in range(repeats):
 			misrepList,repList, remBreaks = calcMR.singleRepair(copy.deepcopy(breakList), None, scaledSigma)
-			misrepairSeps+=[m[2] for m in misrepList]
+			misrepairSeps+=[mis[2] for mis in misrepList]
 
 	if len(misrepairSeps)>0:
-		print('\t'.join(map(str, np.histogram(misrepairSeps, rBins, density=True)[0]))) 
+		print(totBreaks/m/2, '\t',len(misrepairSeps)/(m*repeats),end='\t')
+		print(fileName,'\t','\t'.join(map(str, np.histogram(misrepairSeps, rBins, density=True)[0]))) 
 	else:
 		print()
 	return None
