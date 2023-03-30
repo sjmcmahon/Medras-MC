@@ -87,8 +87,20 @@ def parseProliferation(prolifString):
 # We use try/except block to catach a few different possible line formats
 # Throw "None" if something goes wrong somewhere
 def parseGeneral(A,function):
-    if len(A)==1:
-        return function(A[0])
+    if len(A)==1 and A[0].strip()=='': return function(-1) # Catch empty fields, return -1.
+    
+    # Try to do direct casting for single values. Catch stray units or trailing characters.
+    if len(A)==1: 
+        try:
+            return function(A[0])
+        except:
+            try:
+                return function(A[0].strip().split()[0])
+            except:
+                print('Error in parsing:',A)
+                return None
+
+    # As above, but for lists.
     try: 
         return list(map(function,A))
     except:
@@ -217,6 +229,7 @@ def parseSDDFile(fileName,verbose=False):
         fields = header['Data entries']
         events = parseDataBlock(fc,fields)
 
-        if verbose and sum([len(e) for e in events])!=header['Damage and Primary Count'][0]:
+        if (verbose and header['Damage and Primary Count']!=-1 and 
+            sum([len(e) for e in events])!=header['Damage and Primary Count'][0]):
             print('Event count mismatch. Expected: ', header['Damage and Primary Count'], '; read: ',len(events))
         return header,events
