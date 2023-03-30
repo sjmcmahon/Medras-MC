@@ -82,7 +82,6 @@ def parseToBreaks(fileName,sig,r_sep = 0.0001,basicStats=False,verbose=False):
     totalDSB=0
     simpleDSB=0
     complexDSB=0
-    multiDSB=0
 
     maxChrom = 0
 
@@ -114,13 +113,10 @@ def parseToBreaks(fileName,sig,r_sep = 0.0001,basicStats=False,verbose=False):
                 else:
                     complexBreak = 0
                 
-                if e['Damage Types'][2]>1:
-                    multiDSB+=1
+                if complexBreak==1:
+                    complexDSB+=1
                 else:
-                    if complexBreak==1:
-                        complexDSB+=1
-                    else:
-                        simpleDSB+=1
+                    simpleDSB+=1
 
                 chromID = [-1,-1,-1,-1]
                 chromPos = 0
@@ -137,7 +133,7 @@ def parseToBreaks(fileName,sig,r_sep = 0.0001,basicStats=False,verbose=False):
                 damageTime = (lesionTime+particleTime)/(60*60*1E9)
 
                 if 'Cause' in e: 
-                    cause = e['Cause']
+                    cause = e['Cause'][0]
                 else:
                     cause = 0
 
@@ -170,7 +166,6 @@ def parseToBreaks(fileName,sig,r_sep = 0.0001,basicStats=False,verbose=False):
                 b[3][1]=b[3][1]-1
 
     complexFrac = [1.0*c/(len(b)/2.0) for c,b in zip(complexities,breaks)]
-    totalComplex = sum(complexities)/(sum([len(b) for b in breaks])/2.0)
 
     if verbose:
         print(fileName.split('/')[-1],'\t', 'Read:', len(breaks), 

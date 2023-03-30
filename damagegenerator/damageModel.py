@@ -67,9 +67,9 @@ def generateDmgandBase(damageType):
 		damageArray[strand][0]=1
 		fullBreakType[1]+=1
 
-	# Single DSB, losing 1 to 1 bases
+	# Single DSB, losing 1 to 10 bases
 	if damageType==[0,0,1]:
-		breakLength = random.randint(1,1)
+		breakLength = random.randint(1,10)
 		# Single bp break is one column
 		if breakLength==1:
 			for row in range(4):
@@ -81,19 +81,19 @@ def generateDmgandBase(damageType):
 					damageArray[row][0]=1
 					damageArray[row][position+1]=1
 
-		fullBreakType[0]+=breakLength*2
-		fullBreakType[1]+=breakLength*2
-		fullBreakType[2]+=1
+		fullBreakType[0]=0
+		fullBreakType[1]=2
+		fullBreakType[2]=1
 
 	# DSB+SSB within 10 BP
 	if damageType==[0,1,1]:
 		SSBGap = random.randint(-10,10)
 		SSBStrand = random.choice([0,3])
-		breakLength = random.randint(1,4)
+		breakLength = random.randint(1,9)
 
 		if SSBGap<0:
 			SSB_BP = 0
-			DSB_Start = -SSBGap
+			DSB_Start = SSBGap
 		else:
 			SSB_BP = SSBGap+breakLength
 			DSB_Start = 0
@@ -110,9 +110,9 @@ def generateDmgandBase(damageType):
 				for position in range(breakLength):
 					damageArray[row][DSB_Start+position]=1
 
-		fullBreakType[0]+=breakLength*2
-		fullBreakType[1]+=breakLength*2
-		fullBreakType[2]+=1
+		fullBreakType[0]=0
+		fullBreakType[1]+=2
+		fullBreakType[2]=1
 
 	# Print out data. Row by row, left to right. 
 	damageString = ''
@@ -271,18 +271,18 @@ def formatBreaks(breakPositions,radius=1.0, bdRange=-1, letData=None, particleTy
 			else:
 				breakType = [0,1,1]
 
-		# Set cause through random assignment
-		if random.random()>directFrac:
-			cause = 1
-		else:
-			cause = 0
-
 		# Sample chromosome, and generate illustrative damage structure
 		chromID, chromPos = chromModel.modelChromosome(x,y,z)
 		damageString,baseString,fullBreakType = generateDmgandBase(breakType)
 
 		# Set BDs to 0 if we're not logging those
 		if bdRange<0: fullBreakType[0]=0
+
+		# Set cause through random assignment - direct or indirect, all breaks
+		if random.random()>directFrac:
+			cause = [1, 0, sum(fullBreakType[:-1])]
+		else:
+			cause = [0, sum(fullBreakType[:-1]), 0]
 
 		# Placeholder values for other parameters if a full output is requested
 		time = str(random.random()*2.0)
@@ -296,7 +296,7 @@ def formatBreaks(breakPositions,radius=1.0, bdRange=-1, letData=None, particleTy
 								toCSV(fullBreakType)])
 		else:
 			newHits.append([toCSV([newEvent,eventNo],','),extentString, chromID, 
-				                chromPos, cause, toCSV(fullBreakType), damageString, baseString,
+				                chromPos, toCSV(cause), toCSV(fullBreakType), damageString, baseString,
 				                time, particleTypes, energies, toCSV(trans,'/'), 
 				                toCSV(direction,'/'), pTime])
 	return newHits
