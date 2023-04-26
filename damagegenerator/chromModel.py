@@ -200,8 +200,8 @@ def modelChromosome(x,y,z):
 
 	# Return values here. Calculate DNA position based on Z position of event.
 	chromosomeID = nearC
-	chromosomeCopy = 1
 	chromatidID = 1
 	chromosomeFrac = generateDNAPosition(x,y,z,chromCentres[nearC])
+	chromosomeArm = 0 if chromosomeFrac<0.33 else 1 # Based on average centromere position
 
-	return ["0, "+str(chromosomeID)+','+str(chromosomeCopy)+','+str(chromatidID),chromosomeFrac]
+	return ["0, "+str(chromosomeID)+','+str(chromatidID)+','+str(chromosomeArm), chromosomeFrac]
