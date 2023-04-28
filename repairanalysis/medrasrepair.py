@@ -266,7 +266,6 @@ def misrepairSeparation(fileData,header,fileName):
 	misrepairSeps = []
 	totBreaks = 0
 	for m,breakList in enumerate(breaks):
-		#print('\n',len(breakList),'\n')
 		if m>=maxExposures:
 			break
 		totBreaks+=len(breakList)
@@ -274,6 +273,7 @@ def misrepairSeparation(fileData,header,fileName):
 			misrepList,repList, remBreaks = calcMR.singleRepair(copy.deepcopy(breakList), None, scaledSigma)
 			misrepairSeps+=[mis[2] for mis in misrepList]
 
+	m = m+1 # Total exposures counted
 	if len(misrepairSeps)>0:
 		print(totBreaks/m/2, '\t',len(misrepairSeps)/(m*repeats),end='\t')
 		print(fileName,'\t','\t'.join(map(str, np.histogram(misrepairSeps, rBins, density=True)[0]))) 
@@ -396,12 +396,12 @@ def trackBreaks(fileData,header,fileName):
 # 
 ###################
 def repairSimulation(folder, analysisFunction='Fidelity', verbose=False):
-	functions = [ ['Fidelity',repairFidelity],
+	functions = [ ['Fidelity',  repairFidelity],
 				  ['Separation',misrepairSeparation],
-				  ['Spectrum',misrepairSpectrum],
+				  ['Spectrum',  misrepairSpectrum],
 				  ['DSBSeparation',dsbSeparation],
-				  ['DSBRadial', radialDSBs],
-				  ['TrackBreaks', trackBreaks] ]
+				  ['DSBRadial',    radialDSBs],
+				  ['TrackBreaks',  trackBreaks] ]
 	summaries=[]
 	timeSummary = []
 

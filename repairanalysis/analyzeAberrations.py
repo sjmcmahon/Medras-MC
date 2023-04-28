@@ -36,7 +36,7 @@ from . import plotAberrations
 
 minFragment = 0   # MBP, minimum measurable fragment for DNA loss
 maxFragment = 5.7 # MBP, maximum measurable fragment for DNA loss
-largeMisrepThreshold = 3000000 # BP, Size of 'large' misrepair
+largeMisrepThreshold = 3 # MBP, Size of 'large' misrepair
 
 #######################################################
 #
@@ -252,7 +252,7 @@ def doRepair(chromosomes, repairs, remBreaks=None, index=0, breaks=-1, baseBreak
 	if remBreaks is not None:
 		breakList = breakList+remBreaks
 	if len(breakList)==0:
-		print(index,'\tNo misrepair!')
+		print(index,'\t',breaks,'\t0\t0\tNo misrepair!')
 		return [],[], []
 
 	# Split up chromosomes, with repaired and remaining breaks
