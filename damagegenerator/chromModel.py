@@ -30,11 +30,13 @@
 # ############################################################################
 import numpy as np
 import scipy.optimize
+import scipy.spatial
 import math
 import random
 
 chromCentres = []
 radius = 1.0
+bpUncertainty = 0 # Variation in base pair position around a grid point
 
 # Calculate area fraction associated with some x position for root-finding.
 # Return illogical values if outside range to ensure good fit. 
@@ -71,137 +73,145 @@ def applyRotation(points):
 	# Apply matrix to points and return
 	return [np.dot(rotMatrix,p) for p in points]
 	
-# Subdivide a plane between minZ and maxZ into chroms chromosome points
-def subDividePlane(minZ,maxZ,planeChroms):
-	jitter = 0.05
-	midZ = 0.5*(minZ+maxZ)
-	zSpread = maxZ-minZ
-	scaledR = np.sqrt(1-midZ*midZ)
-
-	# Split into a number of rows, approximately equal to square root of chromosomes
-	chromRows = int(pow(planeChroms,0.5))
-	if random.random()>0.5:
-		chromRows+=1
-
-	# Assign at least one chromosome in each row
-	rowSizes = [1]*chromRows
-	for n in range(planeChroms-chromRows):
-		rowSizes[random.randint(0,chromRows-1)]+=1
-	
-	# Calculate final positions for each chromosome
-	cumChroms = 0
-	currY = 0
-	lastVol = 0
-	positions = []
-	for rowChroms in rowSizes:
-		# Again, fraction of area is equal to by fraction of chromosomes
-		# Split along Y dimension here.
-		cumChroms += rowChroms
-		newArea = cumChroms/planeChroms*(np.pi)
-
-		# Guess initial Y value, then use root-finding to solve.
-		# No simple polynomial, so use more complex method
-		yGuess = 2*np.sqrt(newArea/np.pi)-1
-		newY = (scipy.optimize.broyden1(lambda x:areaFunc(newArea,x),yGuess) ).item()
-
-		# Calculate midpoint of Y slice, and X and Y spans
-		midY = 0.5*(currY+newY)
-		ySpan = newY-currY
-		xSpan = 2*np.sqrt(1-midY*midY)
-
-		# Distribute chromosomes along X dimension
-		xPos = [( (x+1)/(rowChroms+1.0)-0.5)*xSpan for x in range(rowChroms)]
-
-		# Generate new positions. Add small jitter to points to break regularity.
-		positions=positions+ [ [scaledR*(x+jitter*xSpan/(rowChroms+1.0)*random.uniform(-0.5,0.5) ),
-								scaledR*(midY+jitter*ySpan*random.uniform(-0.5,0.5)),
-								midZ+zSpread*jitter*random.uniform(-0.5,0.5)] for x in xPos]
-
-		currY = newY
-	return positions
-
 # Sub-divide a sphere into a number of chromosome territories
 # Very simplified, no strong biological rationale
-def subDivideSphere(noChrom,newRadius = 1.0):
-	global chromCentres
-	global radius
-	radius = newRadius
 
-	# Divide into a number of Z chromosome 'planes', scaled as cube root of noChrom. 
-	# Floor or ceiling this value randomly.
-	chromPlanes = int(pow(noChrom,1/3.0))
-	if random.random()>0.5:
-		chromPlanes+=1
+# Assign chromosomes in a rigid grid, 4 chromosomes deep on each side of nucleus
+# Can probably be generalised, but some tricky aspects
+def assignChromosome(point,radius):
+	# Sort by Z, thresholds at 0.36, 0.61, 0.8 and 1 radii. Calculate h based on this.
+	x,y,z = [c/radius for c in point]
+	if z<0:
+		h = 1+z # Radius Minus (minus z)
+		zOffset = 0
+	else:
+		h = 1-z
+		zOffset = 23 # Z Offset for far side of nucleus
 
-	# Place at least 1 chromosome in each plane, then randomly distribute the rest
-	chromPerPlane = [1]*chromPlanes
-	for n in range(noChrom-chromPlanes):
-		chromPerPlane[random.randint(0,chromPlanes-1)]+=1
+	if h<=0.36: # 4 chromosomes
+		if y<0: 
+			yOffset = 0 
+		else:
+			yOffset = 2
+		if x<0: return 0 + zOffset + yOffset
+		if x>=0: return 1 + zOffset + yOffset
+
+	if h<=0.61: # 6 chromosomes
+		if y<0: 
+			yOffset = 0  
+		else:
+			yOffset = 3
+		edge = 0.22 # Need to mark position with 1/3 on each side
+		if x<=-edge: return 4 + zOffset + yOffset
+		if x>-edge and x<edge: return 5 + zOffset + yOffset
+		if x>=edge: return 6 + zOffset + yOffset
+
+	if h<=0.8: # 6 chromosomes, but split along X first instead this time
+		if x<0: 
+			xOffset = 0  
+		else:
+			xOffset = 3
+		edge = 0.245 # Need to mark position with 1/3 on each side
+		if y<=-edge: return 10 + zOffset + xOffset
+		if y>-edge and y<edge: return 11 + zOffset + xOffset
+		if y>=edge: return 12 + zOffset + xOffset
+
+	if h<=1: # 7 chromosomes, 4 below bound 3 above
+		if y<0.14: 
+			edge = 0.42
+			if x<=-edge: return 16 + zOffset
+			if x>-edge and x<=0: return 17 + zOffset 
+			if x>0 and x<=edge: return 18 + zOffset
+			if x>=edge: return 19 + zOffset
+		else:
+			edge = 0.25 # Need to mark position with 1/3 on each side
+			if x<=-edge: return 20 + zOffset
+			if x>-edge and x<edge: return 21 + zOffset
+			if x>=edge: return 22 + zOffset 
+
+	print('Failed to assign chromosome!',point)
+	return -1
+
+# Very crude 3D splitting to give regions of chromosome. Partition along X, Y, Z sequentially.
+def partitionChromosome(chromPoints, depth=1):
+	finalSplits = []
+
+	xSort = chromPoints[np.argsort(chromPoints[:,0],0)]
+	xPartition = [xSort[:len(xSort)//2],xSort[len(xSort)//2:]]
+	for xSplit in xPartition:
+		ySort = xSplit[np.argsort(xSplit[:,1],0)]
+		yPartition = [ySort[:len(ySort)//2],ySort[len(ySort)//2:]]
+		for ySplit in yPartition:
+			zSort = ySplit[np.argsort(ySplit[:,2],0)]
+			zPartition = [zSort[:len(zSort)//2],zSort[len(zSort)//2:]]
+
+			for zSplit in zPartition:
+				zSplit = zSplit[np.lexsort((zSplit[:,0],zSplit[:,1],zSplit[:,2]))]
+				if depth>1:
+					finalSplits.append(partitionChromosome(zSplit,depth-1))
+				else:
+					finalSplits.append(zSplit)
 	
-	# Assign thickness of each Z plane based on chromosome number
-	cumChroms = 0
-	currZ = 0
-	lastVol = 0
-	planeZ = []
-	for chroms in chromPerPlane:
-		# Fraction of volume is given by current chromosome count over total chromosomes
-		cumChroms += chroms
-		newVol = cumChroms/noChrom*(4.0/3.0*np.pi)
+	return np.concatenate(finalSplits)
 
-		# Solve volume equation to get Z position corresponding to plane
-		coeffs = [-np.pi/3, np.pi, 0, 2*np.pi/3-newVol]
-		newZ = np.roots(coeffs)[1].real
+# Note - we don't use noChrom for now, held as placeholder for later
+def subDivideSphere(noChrom = 46,newradius = 4.65, gridSize = 106):
+	global chromCentres
+	global chromTree
+	global radius
+	global bpUncertainty
 
-		# Store starting and final Z, and chromosomes per plane
-		planeZ.append([currZ,newZ,chroms])
-		currZ = newZ
+	if noChrom != 46: print("Warning: Currently restricted to human (46 chromosome) nuclei")
 
-	# Distribute chromosomes in each plane
-	chromCentres = []
-	for row in planeZ:
-		chromCentres=chromCentres+subDividePlane(*row)
+	radius = newradius
+	gridPoints = [(n-0.5*gridSize+0.5)*2*radius/gridSize for n in range(gridSize)]
 
-	# Shuffle order and rotate to randomize chromosome positions
-	random.shuffle(chromCentres)
-	chromCentres = applyRotation(chromCentres)
+	allC = []
+	pointGrid = []
+	for z in gridPoints:
+		for x in gridPoints:
+			for y in gridPoints:
+				if np.linalg.norm([x,y,z])<=radius:
+					c=assignChromosome([x,y,z],radius)
+					allC.append(c)
+					pointGrid.append([x,y,z,c])
 
-	# Scale to final radius
-	chromCentres = [np.array(c)*radius for c in chromCentres]
+	newPointGrid = []
+	# Update with chromosome positions, just incrementing in order. Guarantees some locality.
+	for c in range(46):
+		chromPoints = np.array([np.array(p) for p in pointGrid if p[3]==c])
+		chromPoints = partitionChromosome(chromPoints, depth=2)
+		chromPosition = [(c+0.5)/len(chromPoints) for c in range(len(chromPoints))]
+		chromPoints= np.c_[chromPoints, chromPosition]
+		newPointGrid.append(chromPoints)
 
-# Generate position of DNA, assuming DNA content linearly increases with increasing Z. 
-# We don't know exact chromosome extent, so approximate this and fuzz on edges
-def generateDNAPosition(x,y,z,c):
-	chromCount = len(chromCentres)
-	effRadius = radius/pow(chromCount,1.0/3.0)
-	chromZ = c[2]
-	deltaZ = z-chromZ
-	if abs(deltaZ)<0.95*effRadius:
-		return 0.5+(effRadius*effRadius*deltaZ-pow(deltaZ,3)/3.0)/(4.0/3.0*pow(effRadius,3.0))
+	# Sort and tidy everything
+	newPointGrid = np.concatenate(newPointGrid)
+	chromCentres = newPointGrid[np.lexsort((newPointGrid[:,0],newPointGrid[:,1],newPointGrid[:,2]))]
 
-	if deltaZ>0:
-		return 1-np.exp(-6.6526/effRadius*deltaZ)
+	# Apply a rotation
+	rotPoints = applyRotation(chromCentres[:,0:3])
+	chromCentres = np.c_[rotPoints, chromCentres[:,3:]]
 
-	if deltaZ<0:
-		return np.exp(-6.6526/effRadius*abs(deltaZ))
+	# Calculate average points per chromosome to estimate uncertainty
+	bpUncertainty = 1/(len(chromCentres)/46)
+
+	# Finally, build a KD tree to enable quick lookup of points
+	chromTree = scipy.spatial.KDTree(chromCentres[:,0:3])
 
 # Generate chromosome data for a random x,y,z position. Simple nearest neighbour model.
 # Assume this is in G1, so always chromatid 1. 
 def modelChromosome(x,y,z):
 	# Iterate through chromosomes to find nearest
-	nearC = -1
 	nearDist = 1E9
-	for n, p in enumerate(chromCentres):
-		distSq = ( (x-p[0])*(x-p[0])+ 
-				   (y-p[1])*(y-p[1])+ 
-				   (z-p[2])*(z-p[2]) )
-		if distSq<nearDist:
-			nearDist=distSq
-			nearC = n
+
+	# Use the KD tree to quickly look up nearest chromosome
+	d, idx = chromTree.query([x,y,z])
+	chromosomeID = int(chromCentres[idx][3])
+	chromosomeFrac = chromCentres[idx][4] + 0.5 * bpUncertainty * (1-np.random.uniform())
 
 	# Return values here. Calculate DNA position based on Z position of event.
-	chromosomeID = nearC
 	chromatidID = 1
-	chromosomeFrac = generateDNAPosition(x,y,z,chromCentres[nearC])
 	chromosomeArm = 0 if chromosomeFrac<0.33 else 1 # Based on average centromere position
 
 	return ["0, "+str(chromosomeID)+','+str(chromatidID)+','+str(chromosomeArm), chromosomeFrac]

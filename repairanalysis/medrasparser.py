@@ -39,21 +39,20 @@
 # ############################################################################
 
 import numpy as np
-import random
 import scipy.stats
 
 from . import sddparser
 
 # Make single point, in sphere 
 def makePoint(r):
-    x=r*(1-2*random.random())
-    y=r*(1-2*random.random())
-    z=r*(1-2*random.random())
+    x=r*(1-2*np.random.uniform())
+    y=r*(1-2*np.random.uniform())
+    z=r*(1-2*np.random.uniform())
 
     while x*x+y*y+z*z>r*r:
-        x=r*(1-2*random.random())
-        y=r*(1-2*random.random())
-        z=r*(1-2*random.random())
+        x=r*(1-2*np.random.uniform())
+        y=r*(1-2*np.random.uniform())
+        z=r*(1-2*np.random.uniform())
 
     return np.array([x,y,z])
 
@@ -63,7 +62,7 @@ def separateDSBs(dsbList):
         testBreak = dsbList[n]
         pos = [testBreak[3][1], testBreak[4]]
         if pos in prevPos:
-            offset = 1E-9*random.random()*testBreak[4]
+            offset = 1E-9*np.random.uniform()*testBreak[4]
             dsbList[n][4]+=offset
             dsbList[n-1][4]+=offset
         prevPos.append(pos)

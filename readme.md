@@ -70,7 +70,15 @@ Separation summarises the spatial separation between DSBs which misrepair. This 
 
 ### Spectrum
 
-The misrepair spectrum analysis calculates the types of misrepair event which result from a given exposure. For the requested timepoint (which can be altered by modifying `simulationLimit` in medrasrepair.py), it calculates the number of residual breaks, the number of misrepaired breaks, 'large' misrepairs (involving movement of more than 3 mega-basepair (MBP) by default), and the number of inter-chromosome misrepairs. It also then summarises the expected chromosome distribution, including the number of chromosomes with 1 or more than 1 chromosome junctions (i.e. inter-chromosome misrepairs), and the number of acentric, normal and multi-centric chromosomes with different structures. Finally, the amount of DNA in small fragments initially and at the final timepoint are presented (in MBP).
+The misrepair spectrum analysis calculates the types of misrepair event which result from a given exposure. For the requested timepoint (which can be altered by modifying `simulationLimit` in medrasrepair.py), it calculates the number of residual breaks, the number of misrepaired breaks, 'large' misrepairs (involving movement of more than 3 mega-basepair (MBP) by default), and the number of inter-chromosome misrepairs. It can then summarise the number of chromosome aberrations in several ways, depending on user options. 
+
+If `analyzeAberrations.printChromosomeTypes` is True (default False), it will produce a full summary of the post-repair chromosomes, including the number of chromosomes with 1 or more than 1 chromosome junctions (i.e. inter-chromosome misrepairs), and the number of acentric, normal and multi-centric chromosomes with different structures. 
+
+If `analyzeAberrations.printAberrations` is True (default True), it will produce a simplified summary of chromosome aberrations, based on standard counting methods - dicentrics and multi-centrics; rings; excess linear fragments; and total aberrations. This has been designed to approximately correspond to traditional solid stain (e.g. Giemsa) counting of aberrations.
+
+If `analyzeAberrations.printViable` is True (default True), it will also report if a cell is expected to be viable or not - that is, is it free from aberrations which would prevent replication. Note that this does not correspond directly to survival in all cells, as some cells have active arrest or apoptotic pathways which can lead to loss of viability based on overall levels of damage, independent of the eventual misrepair.
+
+Finally, if  `analyzeAberrations.printDNALoss` is True (default False), the amount of DNA in small fragments initially and at the final timepoint are presented (in MBP), which may be compared with e.g. quantities of DNA released in PFGE studies.
 
 In addition, if `doPlot` is set to true, the model will also generate an mFISH-style plot of the resulting chromosome distribution for each simulated repair, to give a visual illustration of the resulting chromosome alterations.
 
@@ -83,14 +91,6 @@ This code is written in python3, and requires the following libraries:
 - openpyxl
 - matplotlib
 
-## Update history
-
-21/03/31: Extensive revision to update code and bring into better agreement with analytic model. Key changes:
-- New repair kinetic model, more accurately reproducing structure of analytic model, particularly regarding misrepair range;
-- A number of updates to repair analysis options to enable a number of new analyses to be performed on SDD files;
-- Minor tweaks to SDD writer to clarify code and ensure compliance with SDD format;
-- A number of minor improvements to output clairy
-
 ## Contacts
 
 For questions/comments/bug reports, please contact stephen.mcmahon (at) qub.ac.uk
@@ -100,5 +100,7 @@ For questions/comments/bug reports, please contact stephen.mcmahon (at) qub.ac.u
 [McMahon2017]	McMahon, S. J., McNamara, A. L., Schuemann, J., Paganetti, H., & Prise, K. M. (2017). A general mechanistic model enables predictions of the biological effectiveness of different qualities of radiation. Scientific Reports, 7(1), 688. http://doi.org/10.1038/s41598-017-10820-1
 
 [McMahon2016]	McMahon, S. J., Schuemann, J., Paganetti, H., & Prise, K. M. (2016). Mechanistic Modelling of DNA Repair and Cellular Survival Following Radiation-Induced DNA Damage. Scientific Reports, 6, 33290. http://doi.org/10.1038/srep33290
+
+[McMahon2021]   McMahon, S. J. & Prise, K. M. (2021). A Mechanistic DNA Repair and Survival Model (Medras): Applications to Intrinsic Radiosensitivity, Relative Biological Effectiveness and Dose-Rate. Frontiers in Oncology, 11, 689112. https://doi.org/10.3389/fonc.2021.689112
 
 [Schuemann2019]	Schuemann J., McNamara A. L., Warmenhoven J., et al. (55 authors). (2019). A new Standard DNA Damage (SDD) data format. Radiation Research; 191(1):76. PMID: 30407901. PMCID: PMC6407706. https://doi.org/10.1667/RR15209.1

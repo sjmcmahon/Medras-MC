@@ -37,6 +37,12 @@ from . import plotAberrations
 minFragment = 0   # MBP, minimum measurable fragment for DNA loss
 maxFragment = 5.7 # MBP, maximum measurable fragment for DNA loss
 largeMisrepThreshold = 3 # MBP, Size of 'large' misrepair
+headerPrinted = False
+
+printChromosomeTypes = False 
+printAberrations = True 
+printViable = True
+printDNALoss = False 
 
 #######################################################
 #
@@ -95,7 +101,6 @@ def centricCheck(baseChromosomes, finalChromosomes,pos=0.5):
 	largeLoss = 0
 	for c in finalChromosomes:
 		centromereCount = centricCount(c,baseChromosomes,pos)
-
 		if centromereCount==0:
 			acentric+=1
 			if sum( abs(f[1]-f[2]) for f in c[3])> largeMisrepThreshold:
@@ -104,7 +109,7 @@ def centricCheck(baseChromosomes, finalChromosomes,pos=0.5):
 			normal+=1
 		if centromereCount>1:
 			multicentric+=1
-	return '\t'.join(map(str,[normal,acentric,largeLoss,multicentric]))
+	return [normal,acentric,largeLoss,multicentric]
 
 # Calculate initial fragment distribution
 def fragmentDistribution(baseChromosomes,breakList):
@@ -197,17 +202,17 @@ def splitChromosomes(chromosomes,breaks):
 
 # Locate chromosome in list matching rejoining event
 def indexChrom(chromFragments, c, p, d):
-	# Tolerate match within 1 part in 10^12, in case of rounding issues
+	# Only accept exact matches - positions should be identical, so no rounding errors
 	for n, chrom in enumerate(chromFragments):
 		firstChrom = chrom[0]
 		if firstChrom[0]==c:
-			if abs(firstChrom[1]-p)<1E-12*p:
+			if firstChrom[1]==p: 
 				if ( (firstChrom[2]-firstChrom[1]>0 and d>0) or 
 				    (firstChrom[2]-firstChrom[1]<0 and d<0) ):
 					return n,0
 		lastChrom = chrom[-1]
 		if lastChrom[0]==c:
-			if abs(lastChrom[2]-p)<1E-12*p:
+			if lastChrom[2]==p: 
 				if ( (lastChrom[2]-lastChrom[1]>0 and d<0) or 
 				     (lastChrom[2]-lastChrom[1]<0 and d>0) ):
 					return n,1
@@ -230,18 +235,30 @@ def appendFragments(chromOne,chromTwo,end1,end2):
 		return chromOne+chromTwo
 
 # Check if header needs to be printed on first execution
-def checkHeader(initialBreaks=None, headerPrint=[False]):
+def checkHeader(initialBreaks=None):
+	global headerPrinted
 	# Use mutable arguments to check if run before
-	if headerPrint[0]:
-		return
-	headerPrint[0] = True
-	print('Index\tBreaks\tResidual\tMisrepairs\tLarge Misrepairs\tInter-Chromosome Misrepairs\t'
-		  'Single-Junction Chromosomes\tMulti-Junction Chromosomes\tNormal Chromosomes\t'
-		  'Acentric Linear\tLarge Acentric Fragment\tMulti-Centric\tCentric Ring\tAcentric Ring\t'
-		  'Multi-Centric Ring\tLarge Ring Fragment', end='')
-	if initialBreaks is not None:
-		print('\tInitial DNA Fragmentation\tPotential DNA loss', end='')
+	if headerPrinted: return
+	headerPrinted = True
+
+	## Print header. Standard block first, then chromosome details by request below
+	print('Index\tBreaks\tResidual\tMisrepairs\tLarge Misrepairs\tInter-Chromosome Misrepairs',end='\t\t')
+
+	if printChromosomeTypes:
+		print('Single-Junction Chromosomes\tMulti-Junction Chromosomes',end='\t')
+		print('Normal Chromosome\tAcentric Linear Fragment\tLarge Acentric Linear Fragment\tMulti-Centric Linear',end='\t')
+		print('Centric Ring\tAcentric Ring\tLarge Acentric Ring\tMulti-Centric Ring', end='\t\t')
+
+	if printAberrations:
+		print('Dicentric Aberrations\tRings Aberrations\tExcess Linear Fragments\tTotal Aberrations',end='\t\t')
+
+	if printViable:
+		print('Viability',end='\t\t')
+
+	if printDNALoss and initialBreaks is not None:
+		print('Initial DNA Fragmentation\tPotential DNA loss', end='\t\t')
 	print()
+
 
 # Core repair loop, iterate over each repair and append chromosome fragments
 def doRepair(chromosomes, repairs, remBreaks=None, index=0, breaks=-1, baseBreaks=None, plot=False, 
@@ -256,7 +273,15 @@ def doRepair(chromosomes, repairs, remBreaks=None, index=0, breaks=-1, baseBreak
 		return [],[], []
 
 	# Split up chromosomes, with repaired and remaining breaks
-	breakList.sort()
+	try:
+		breakList.sort(key = lambda x: [x[0], x[1], x[2], x[3][0], x[3][1], x[3][2]])
+	except ValueError as ve:
+		print('Failed to sort breaklist! List contents are:')
+		print(breakList)
+		print('Function arguments:')
+		print(chromosomes,repairs, remBreaks,index, breaks, baseBreaks, plot, allFragments, inFile, outFile, '', sep='\n')
+		print(ve)
+		exit()
 	chromFrags = splitChromosomes(chromosomes,breakList)
 	chromList = copy.deepcopy(chromFrags)
 	rings = []
@@ -287,27 +312,53 @@ def doRepair(chromosomes, repairs, remBreaks=None, index=0, breaks=-1, baseBreak
 	linearChromosomes = characteriseChroms(chromList)
 	ringChromosomes = characteriseChroms(rings,True)
 
-	# Plot and print stats if requested
+	# Print stats and plot if requested
 	if plot: plotAberrations.drawChroms(chromosomes, linearChromosomes, ringChromosomes, 
 								   		inFile=inFile, outFile=outFile)
 
+	# Basic statistics
 	print(index, '\t', breaks, '\t', len(remBreaks), 
-		  '\t', misrepairStats(repairs, chromosomes),
-	      '\t', calculateComplexities(chromList+rings), 
-	      '\t', centricCheck(chromosomes,linearChromosomes),
-	      '\t', centricCheck(chromosomes,ringChromosomes), 
-	      end='')
-	if baseBreaks!=None:
+		  '\t', misrepairStats(repairs, chromosomes), 
+		  end = '\t\t')
+
+	# Characterise chromosomes remaining after irradiation
+	linearChromosomeStats = centricCheck(chromosomes,linearChromosomes)
+	ringChromosomeStats = centricCheck(chromosomes,ringChromosomes)
+
+	# Count key aberration types from these
+	mutlicentrics = linearChromosomeStats[3] + ringChromosomeStats[3]
+	observedRings = ringChromosomeStats[0] + max(0,ringChromosomeStats[2] - ringChromosomeStats[0]) # Decrement to account for centric ring producing acentric fragment too
+	excessFragments = max(0, linearChromosomeStats[3] - mutlicentrics - observedRings) # Exclude those fragments 'paired' with other fragment types
+
+	# Outputs by user selection
+	# Print all chromosomes present
+	if printChromosomeTypes:
+		print(calculateComplexities(chromList+rings), end='\t')
+		print('\t'.join(map(str,linearChromosomeStats)), '\t',
+		      '\t'.join(map(str,ringChromosomeStats)), end='\t\t')
+
+	# Print aberrations as typically defined
+	if printAberrations:
+		print(mutlicentrics, '\t', observedRings, '\t', excessFragments, '\t', 
+			  mutlicentrics + observedRings + excessFragments,end='\t\t')
+
+	if printViable:
+		if mutlicentrics + observedRings + excessFragments > 0:
+			print(0,end='\t\t')
+		else:
+			print(1,end='\t\t')
+
+	# Print potential DNA loss, relevant to PFGE 
+	lostFragments = []
+	if printDNALoss and baseBreaks!=None:
 		lostDNA, lostFragments = dnaLoss(chromosomes, linearChromosomes+ringChromosomes)
-		print('\t',fragmentDistribution(chromosomes,baseBreaks),
-			  '\t',lostDNA, end='')
-		if allFragments:
-			print('\t\t','\t'.join(map(str,sorted(lostFragments))),end='')
+		print(fragmentDistribution(chromosomes,baseBreaks),'\t',lostDNA, end='\t\t')
+		if allFragments: 
+			print('\t','\t'.join(map(str,sorted(lostFragments))),end='\t\t')
 		
 	print()
 
 	return chromList, rings, lostFragments
-
 
 #######################################################
 #
@@ -347,7 +398,7 @@ def repairFromFile(dataFile,doPlot=True):
 		if len(currentSet)>0:
 			repairSets.append(currentSet)
 
-	# Finally, plot data
+	# Finally, generate repair data
 	for n,rep in enumerate(repairSets):
 		fileIn = dataFile+" "+str(n)
 		fileOut = dataFile.split('.')[0]+" "+str(n)+" aberrations.png"

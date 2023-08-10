@@ -58,7 +58,7 @@ kineticLimit = 25 	 # Hours, maximum time for repair kinetics
 doPlot = False
 allFragments = False
 listAcentrics = False
-simulationLimit = 24 # Hours, time at which to simulate misrepair
+simulationLimit = np.inf # Hours, time at which to simulate misrepair
 
 # Method to sort files nicely with numbers.
 def sort_nicely( l ):
@@ -169,9 +169,15 @@ def summariseFidelity(fileName, complexity, outputs):
 	totalBreaks = 1.0*sum(o[0] for o in outputs)
 	averageBreaks = np.mean([o[0] for o in outputs])
 	breakStdev = np.std([o[0] for o in outputs])
-	averageMisrep = np.mean([o[0]*o[1] for o in outputs])/averageBreaks
-	misrepStdev   = np.std([o[1] for o in outputs])
-	fileAverages = [sum([o[n]*o[0] for o in outputs])/totalBreaks for n in range(3,6)]
+
+	if totalBreaks>0:
+		averageMisrep = np.mean([o[0]*o[1] for o in outputs])/averageBreaks
+		misrepStdev   = np.std([o[1] for o in outputs])
+		fileAverages = [sum([o[n]*o[0] for o in outputs])/totalBreaks for n in range(3,6)]
+	else:
+		averageMisrep=0 
+		misrepStdev = 0 
+		fileAverages = [0,0,0]
 	smry = (fileName+'\tSummary\t'+str(totalBreaks)+'\t'+str(complexity)+'\t'+str(averageBreaks)+
 		   '\t'+str(breakStdev)+'\t'+str(averageMisrep)+'\t'+str(misrepStdev)+'\t'+
 		   str(fileAverages[0]) )
@@ -265,6 +271,7 @@ def misrepairSeparation(fileData,header,fileName):
 	print(fileName,'\t',len(breaks),'\t',emptySets,'\t', end=' ')
 	misrepairSeps = []
 	totBreaks = 0
+	m=0
 	for m,breakList in enumerate(breaks):
 		if m>=maxExposures:
 			break
