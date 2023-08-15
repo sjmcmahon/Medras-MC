@@ -107,14 +107,17 @@ def misrepairSpectrum(fileData, header, fileName):
 	allBreaks, scaledSigma, meanE, complexity, complexitySd, dose, emptySets = fileData
 	radius = scaledSigma/sigma
 
+	print('Data for: '+fileName)
+	if len(allBreaks)==0:
+		print('No damage in file')
+		return None
+
 	# Test to see if chromosome ID data is available, abort if not
 	firstBreak = allBreaks[0][0]
 	if firstBreak[3][0]==-1:
 		print('No chromosome IDs found in data file, aborting!')
 		return None
 
-	print('Data for: '+fileName)
-	
 	noChroms = header['Chromosomes'][0]
 	baseChromosomes = [[n,0,header['Chromosomes'][1][n] ] for n in range(noChroms) ]
 	fullFrags = []

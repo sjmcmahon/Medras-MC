@@ -328,7 +328,7 @@ def doRepair(chromosomes, repairs, remBreaks=None, index=0, breaks=-1, baseBreak
 	# Count key aberration types from these
 	mutlicentrics = linearChromosomeStats[3] + ringChromosomeStats[3]
 	observedRings = ringChromosomeStats[0] + max(0,ringChromosomeStats[2] - ringChromosomeStats[0]) # Decrement to account for centric ring producing acentric fragment too
-	excessFragments = max(0, linearChromosomeStats[3] - mutlicentrics - observedRings) # Exclude those fragments 'paired' with other fragment types
+	excessFragments = max(0, linearChromosomeStats[2] - mutlicentrics - observedRings) # Exclude those large acentric fragments 'paired' with other fragment types
 
 	# Outputs by user selection
 	# Print all chromosomes present
