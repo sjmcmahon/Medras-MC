@@ -125,6 +125,8 @@ def parseToBreaks(fileName,sig,r_sep = 0.0001,basicStats=False,verbose=False):
                         maxChrom=chromID[1]
                 if 'Chromosome Position' in e:
                     chromPos = e['Chromosome Position']
+                    if chromPos>=1:
+                        chromPos = chromPos/1000000 # If it's not a fraction along the DNA, convert from BP to MBP
 
                 # Calculate damage time, cast to hours. Set individual times to 0 if not provided.
                 lesionTime = min(e['Lesion Time']) if 'Lesion Time' in e else 0
@@ -132,7 +134,10 @@ def parseToBreaks(fileName,sig,r_sep = 0.0001,basicStats=False,verbose=False):
                 damageTime = (lesionTime+particleTime)/(60*60*1E9)
 
                 if 'Cause' in e: 
-                    cause = e['Cause'][0]
+                    if type(e['Cause']) is int:
+                        cause = e['Cause']
+                    else:
+                        cause = e['Cause'][0]
                 else:
                     cause = 0
 
