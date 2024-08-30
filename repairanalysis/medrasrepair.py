@@ -73,7 +73,7 @@ def sort_nicely( l ):
 ###################
 def prepareDamage(misrepairList, remainingBreaks, chromosomes):
 	# Trim misrepair list - store chromosome, genetic position, and orientation of each break (a&b)
-	trimMisrep = [ [[a[3][1],a[4],a[5],a[1]], [b[3][1],b[4],b[5],a[1]] ] for a,b,c,d in misrepairList] 
+	trimMisrep = [ [[a[3][1],a[4],a[5],a[1]], [b[3][1],b[4],b[5],b[1]] ] for a,b,c,d in misrepairList]
 	# Extract same data for remaining breaks
 	trimBreaks = [ [a[3][1],a[4],a[5],a[1]] for a in remainingBreaks]
 

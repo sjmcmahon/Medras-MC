@@ -43,6 +43,7 @@ printChromosomeTypes = False
 printAberrations = True 
 printViable = True
 printDNALoss = False 
+printAllMisrejoined=False
 
 #######################################################
 #
@@ -176,6 +177,13 @@ def characteriseChroms(chroms,rings=False,doPrint=False):
 		retChroms.append([totLen,mainChrom,rings,c,spatialLen])
 	return retChroms
 
+# Dump a formatted list of all chromosomes with a misjoined break
+def identifyMisrejoins(chroms):
+	misrejoinedChroms = []
+	for c in chroms:
+		if len(c)>1:
+			misrejoinedChroms.append([f[0:3] for f in c])
+	return misrejoinedChroms
 
 #######################################################
 #
@@ -257,6 +265,10 @@ def checkHeader(initialBreaks=None):
 
 	if printDNALoss and initialBreaks is not None:
 		print('Initial DNA Fragmentation\tPotential DNA loss', end='\t\t')
+
+	if printAllMisrejoined:
+		print('Full list of misrejoined chromosomes',end='\t\t')
+
 	print()
 
 
@@ -282,6 +294,7 @@ def doRepair(chromosomes, repairs, remBreaks=None, index=0, breaks=-1, baseBreak
 		print(chromosomes,repairs, remBreaks,index, breaks, baseBreaks, plot, allFragments, inFile, outFile, '', sep='\n')
 		print(ve)
 		exit()
+
 	chromFrags = splitChromosomes(chromosomes,breakList)
 	chromList = copy.deepcopy(chromFrags)
 	rings = []
@@ -356,6 +369,13 @@ def doRepair(chromosomes, repairs, remBreaks=None, index=0, breaks=-1, baseBreak
 		if allFragments: 
 			print('\t','\t'.join(map(str,sorted(lostFragments))),end='\t\t')
 		
+	# Print all chromosomes with a misrejoined section
+	if printAllMisrejoined:
+		misrejChroms = identifyMisrejoins(chromList+rings)
+		print(misrejChroms[0],end='')
+		for n in range(1,len(misrejChroms)):
+			print('; ',end='')
+			print(misrejChroms[n],end='')
 	print()
 
 	return chromList, rings, lostFragments

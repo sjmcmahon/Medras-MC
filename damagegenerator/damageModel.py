@@ -176,7 +176,7 @@ def ionHits(DSBCount=1.0, radius=1.0, LETdata=None, fixedTracks=None, breakStats
 
 	# Estimate mean number of tracks needed to deposit target number of hits in nucleus
 	# Determined using ratio of nucleus volume to whole exposed cylinder
-	trackEstimate = DSBCount/(DSBPerTrack*EScaling * (4/3*np.pi*radius*radius)/(2*np.pi*pow(radius+padding,2)))
+	trackEstimate = DSBCount/(DSBPerTrack * (4/3*np.pi*radius*radius)/(2*np.pi*pow(radius+padding,2)))
 
 	if fixedTracks is None:
 		actualTracks = np.random.poisson(trackEstimate)
@@ -417,7 +417,7 @@ def dataFileNames(Z):
 		return 'Radial Energy Carbon.xlsx'
 
 # Generate an exposure for a requested ion, LET, and number of repeats
-def generateExposure(energy, LET, dose, particleZ, runs, targetRadius=4.32, 
+def generateExposure(energy, LET, dose, particleZ, runs, targetRadius=4.229, 
 				     chromosomes=46, timeProfile = None, extraTargetInfo='',
 				     fileName = None):
 	# Some general model parameters for SDD header
@@ -454,7 +454,7 @@ def generateExposure(energy, LET, dose, particleZ, runs, targetRadius=4.32,
 				letData=letData, incident=particleID, energy=energy, timeProfile=timeProfile)
 
 # Generate an exposure for an abtirary set of exposures
-def generateMultiExposure(energies, LETs, doses, particleZs, runs, targetRadius=4.32, 
+def generateMultiExposure(energies, LETs, doses, particleZs, runs, targetRadius=4.229, 
 				          chromosomes=46, timeProfiles = None, extraTargetInfo='', 
 				          fileName = None):
 	# Some general model parameters for SDD header
@@ -497,7 +497,7 @@ def generateMultiExposure(energies, LETs, doses, particleZs, runs, targetRadius=
 
 # Example application
 # Build a basic X-ray and ion dataset
-def basicXandIon(targetRadius = 4.32, runs = 10, conditions=None, extraTargetInfo = ''):
+def basicXandIon(targetRadius = 4.229, runs = 10, conditions=None, extraTargetInfo = ''):
 	# Photons, doses from 1 to 8 Gy
 	particleZ = 0
 	ionConditions = [[1.0,0,1], [1.0,0,2], [1.0,0,3], [1.0,0,4], 
