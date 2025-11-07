@@ -82,6 +82,12 @@ Finally, if  `analyzeAberrations.printDNALoss` is True (default False), the amou
 
 In addition, if `doPlot` is set to true, the model will also generate an mFISH-style plot of the resulting chromosome distribution for each simulated repair, to give a visual illustration of the resulting chromosome alterations.
 
+### Repair Failure
+
+In addition to the binary misrepair of ends between two or more DSBs, there is also evidence that misrepair events can occur even for isolated DSBs, such as at low dose-rates and LETs. This is incorporated through 'Repair Failure', where even correctly rejoined ends have a chance of undergoing misrepair. This is implemented in Medras-MC in a probabilistic fashion, and can be turned on or off by setting the `repairFailure` flag (default `True`). 
+
+This process has been optimised to reproduce the experimentally observed rates of different types of chromosome aberrations (exchanges, dicentrics, large and small deletions). However, note that because SDD files do not contain spatial information on the locations of damage, this approach cannot take into account proximity of chromosomes at present. As a result, while total rates should be reflective of experimental results and the number and sizes of chromosomes, the particular chromosomes involved in exchanges may not reflect the modelled spatial nuclear distribution, and so should be analyzed with care.
+
 ## Requirements
 
 This code is written in python3, and requires the following libraries:
