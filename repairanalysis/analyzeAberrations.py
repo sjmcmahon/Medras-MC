@@ -183,6 +183,9 @@ def identifyMisrejoins(chroms):
 	for c in chroms:
 		if len(c)>1:
 			misrejoinedChroms.append([f[0:3] for f in c])
+		else:
+			if c[0][1]>0:
+				misrejoinedChroms.append([f[0:3] for f in c])
 	return misrejoinedChroms
 
 #######################################################
@@ -422,4 +425,4 @@ def repairFromFile(dataFile,doPlot=True):
 	for n,rep in enumerate(repairSets):
 		fileIn = dataFile+" "+str(n)
 		fileOut = dataFile.split('.')[0]+" "+str(n)+" aberrations.png"
-		leftChroms, rings = doRepair(chromData,rep, plot=doPlot, inFile = fileIn, outFile=fileOut)
+		leftChroms, rings = doRepair(chromData, rep, plot=doPlot, inFile = fileIn, outFile=fileOut)

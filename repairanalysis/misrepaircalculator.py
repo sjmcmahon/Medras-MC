@@ -1,35 +1,35 @@
 # ############################################################################
-# 
+#
 # This software is made freely available in accordance with the simplifed BSD
 # license:
-# 
+#
 # Copyright (c) <2018>, <Stephen McMahon>
 # All rights reserved
-# Redistribution and use in source and binary forms, with or without 
+# Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
-# 1. Redistributions of source code must retain the above copyright notice, 
+# 1. Redistributions of source code must retain the above copyright notice,
 # this list of conditions and the following disclaimer.
 # 2. Redistributions in binary form must reproduce the above copyright notice,
-# this list of conditions and the following disclaimer in the documentation 
+# this list of conditions and the following disclaimer in the documentation
 # and/or other materials provided with the distribution.
 #
-# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND ANY 
-# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
-# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 # DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE FOR ANY
-# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES 
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND 
-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF 
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # Contacts: Stephen McMahon,	stephen.mcmahon@qub.ac.uk
-# 
+#
 # ############################################################################
 #
-# Core repair model code, which simulates repairs of initial 
+# Core repair model code, which simulates repairs of initial
 # break distributions
 #
 # ############################################################################
@@ -50,7 +50,16 @@ fastFoci = 8.12
 slowFoci = 0.405
 mmejFoci = 0.0176
 
-#Square of distance to
+# Repair failure parameters - derived from analytic Medras rates
+repairFailRate = 1-0.98537
+interChromRate = 0.1348
+largeDelRate = 0.2426
+largeDelRateIfIntra = largeDelRate/(1-interChromRate)
+
+###################
+# Utility functions
+###################
+# Square of distance to
 def distanceToSq(p1,p2):
 	dx=p1[0]-p2[0]
 	dy=p1[1]-p2[1]
@@ -86,10 +95,119 @@ def pickRepair(interactionArray,n):
 
 	return chosenInteraction
 
-def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
+# Get the partner end ID for a given other end ID
+partnerBreak = lambda p: p+1 - 2*(p%2)
+
+###################
+# Analyze a set of misrepair events to generate kinetics
+def calculateRepairKinetics(repairEvents, addFociClearance):
+	repairTimes = []
+	unrepairedEnds = []
+	for t, p1, p2, complexity in repairEvents:
+		breaksRepaired = 0
+
+		# If this is a correct repair, clears one DSB, with complexity from event
+		if partnerBreak(p1) == p2:
+			breaksRepaired = 1
+		else:
+			# If it's a mismatch, can clear 0, 1 or 2 ends depending on other breaks
+			# And set complexity to 2, to reflect MMEJ for mismatch
+			complexity = 2
+			for p in (p1, p2):
+				p=abs(p)
+				try:
+					partner = partnerBreak(p)
+					partnerIndex =  unrepairedEnds.index(partner) # Will except here if no match.
+					breaksRepaired+=1
+					unrepairedEnds.pop(partnerIndex)
+				except:
+					unrepairedEnds.append(p) # If no match, add to unrepaired list
+					continue
+
+		# For this number of breaks, append this time as repair time
+		# optionally plus time for foci clearance
+		for n in range(breaksRepaired):
+			candidateTime = t
+			if addFociClearance:
+				repRate = fastFoci
+				if min(p1,p2)<0 or complexity>1:
+					repRate=mmejFoci
+				else:
+					if complexity>0:
+						repRate = slowFoci
+				candidateTime = t-np.log(np.random.random())/repRate
+			repairTimes.append(candidateTime)
+
+	return repairTimes
+
+# Select new chromosome location for mistmatch event
+def repairFailureLocation(currChrom, breakPos, chromSizes):
+	largeDelSize = 3 # In MBP
+	# Version 4 - Correct inter-chrom rate and intra-chrom rate in own function
+	interChrom = 0
+	if np.random.rand()<interChromRate:
+		interChrom = 1
+		# If inter-chromosome, put on a random point on randomly selected other chromosome
+		chromID = np.random.choice([i for i in range(0, len(chromSizes)) if i != currChrom[1]])
+		#chromID = np.random.randint(0,len(chromSizes))
+		#while chromID == currChrom: chromID = np.random.randint(0,len(chromSizes)) # Protect against getting same chromosome
+		newChrom = [0, chromID, np.random.randint(0,2), np.random.randint(0,2)]
+		newBreakLoc = np.random.rand()
+	else:
+		# if intra-chromosome, test if it's a large or a small deletion and size appropriately
+		newChrom = copy.copy(currChrom)
+		chromSize = chromSizes[currChrom[1]]
+		if chromSize<largeDelSize*2 or np.random.rand()>largeDelRateIfIntra:
+			# If it's a small break
+			newBreakLoc = np.random.uniform(max(0,breakPos-largeDelSize/chromSize),min(1,breakPos+largeDelSize/chromSize)) # Sample within 3 MBP
+		else:
+			# Sample randomly outside a 3 MBP window around the break
+			newBreakLoc = np.random.uniform(0,(chromSize-2*largeDelSize)/chromSize) # Sample length of chromosome minus 2*Large del size window
+			if newBreakLoc > breakPos-largeDelSize/chromSize: newBreakLoc += 2*largeDelSize/chromSize # Then offset if after break
+
+	return newChrom, newBreakLoc, interChrom
+
+# Add single-event misrepairs, which fail separately from binary events
+def addRepairFailure(misrepairEvents, repairEvents, breakList, chromSizes):
+	newBreaks = []
+	newRepairs = []
+	newMisreps = []
+
+	nextBreak = len(breakList)+1
+	popList = []
+	for n, repEvent in enumerate(repairEvents):
+		if partnerBreak(repEvent[1]) == repEvent[2]: # If this is a correct repair, sample for repair failure
+			if np.random.rand()<repairFailRate:
+				popList.append(n) 			# Track list of which breaks to remove at end
+				endOne = breakList[repEvent[1]]
+				endTwo = breakList[repEvent[2]]
+
+				newChrom, newBreakLoc, interChrom = repairFailureLocation(endOne[3], endOne[4], chromSizes) # Sample location of new misrepair
+
+				upDown = [1,-1] if np.random.rand()>0.5 else [-1,1] # Randomly set orientation of breaks relative to centromere
+
+				# Add breaks - index, position, complexity, chromosome ID, chromosome pos, centromere side, new event status, time and cause
+				newBreaks += [[-(nextBreak+1), endOne[1],endOne[2], newChrom, newBreakLoc, upDown[0], endOne[6], endOne[7], endOne[8]],
+							  [-(nextBreak+2), endTwo[1],endTwo[2], newChrom, newBreakLoc, upDown[1], endTwo[6], endTwo[7], endTwo[8]] ]
+				nextBreak += 2
+
+				# Record repair event - time, end 1 ID, end 2 ID, complexity
+				newRepairs += [[repEvent[0], repEvent[1], newBreaks[-2][0], endOne[2]],
+							   [repEvent[0], repEvent[2], newBreaks[-1][0], endTwo[2]]]
+
+				# Record misrepair event - two break ends, separation which we log as 0, and inter-chromosome flag
+				newMisreps += [[endOne, newBreaks[-2], 0, interChrom],
+							   [endTwo, newBreaks[-1], 0, interChrom] ]
+
+	for n in sorted(popList, reverse=True): repairEvents.pop(n) # Pop repair events which are to be replaced
+
+	return misrepairEvents+newMisreps, repairEvents+newRepairs, breakList+newBreaks
+
+def singleRepair(initBreakList, rateTable, sigma=None, finalTime = np.inf, chromSizes = None, repairFailure = True):
 	# Sort breaks by order of creation in time and set up interaction rates if needed
-	if rateTable is None: 
-		breakList.sort(key = lambda x:x[7])
+	initBreakList.sort(key = lambda x:x[7])
+	breakList = copy.deepcopy(initBreakList)
+	if rateTable is None:
 		rateTable=buildRateTable(breakList,sigma)
 
 	# Get fast/slow kinetic data from breaklist
@@ -134,10 +252,10 @@ def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
 			# Assign complexity for foci clearance based on most complex end
 			complexity = max(breakList[endOne][2],breakList[endTwo][2])
 
-			# Identify type of repair, and log details
+			# If it's a misrepair, log it and appropriate details
 			if breakList[endOne][0]!=breakList[endTwo][0]:
-				# If ends aren't from the same break, then it's a misrepair. Log details. 
-				if (breakList[endOne][3][1]==breakList[endTwo][3][1] and 
+				# If ends aren't from the same break, then it's a misrepair. Log details.
+				if (breakList[endOne][3][1]==breakList[endTwo][3][1] and
 					breakList[endOne][3][2]==breakList[endTwo][3][2]):
 					interChrom = 0
 				else:
@@ -145,15 +263,8 @@ def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
 				separation = np.sqrt(distanceToSq(breakList[endOne][1], breakList[endTwo][1]))
 				misrepairedPairs.append([breakList[endOne], breakList[endTwo], separation, interChrom])
 
- 				# Track if either end is the second end from a DSB. Log reduction in breaks if so
-				p1Partner = endOne +1 - 2*(endOne%2)
-				if breakList[p1Partner] == 0: repairEvents.append([nextTime,endOne,endTwo,complexity])
-				p2Partner = endTwo +1 - 2*(endTwo%2)
-				if breakList[p2Partner] == 0: repairEvents.append([nextTime,endOne,endTwo,complexity])
-
-			else:
-				# Matched DSB ends always clear 1 DSB, no misrepair
-				repairEvents.append([nextTime,endOne,endTwo,complexity])
+			# Record all repair events for future kinetics analysis
+			repairEvents.append([nextTime,endOne,endTwo,complexity])
 
 			# Tidy up break data
 			liveBreaks.pop(liveBreaks.index(endOne))
@@ -177,13 +288,17 @@ def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
 				nextBreakTime = np.inf
 			lastBreak = liveBreaks[-1]
 
+	# Once all binary misrepair is done, apply repair failure events if requested
+	if repairFailure:
+		misrepairedPairs, repairEvents, newBreakList = addRepairFailure(misrepairedPairs, repairEvents, initBreakList, chromSizes)
+
 	# Return a list of unrepaired breaks, if we halted before all were repaired
 	if finalTime<np.inf:
 		remBreaks = [b for b in breakList if b!=0]
 		return misrepairedPairs, repairEvents, remBreaks
 
-	# Otherwise, clean up any breaks which were missed and return 'full' repair
-	# This is an effectively random pairing, but should hopefully just be tidying up corner cases
+	# If full repair is requested clean up any breaks which were missed
+	# This is a random pairing, but should hopefully just be tidying up corner cases
 	if len(liveBreaks)+len(pendingBreaks)>0:
 		remBreaks = [p for p in range(len(breakList)) if breakList[p]!=0]
 		while len(remBreaks)>0:
@@ -192,24 +307,27 @@ def singleRepair(breakList,rateTable,sigma=None, finalTime = np.inf):
 			repairEvents.append([1E6,p1,p2,1])
 			misrepairedPairs.append([breakList[p1],breakList[p2],-1,0])
 
-	# Otherwise just return 'full' repair
+	# Return final data
 	return misrepairedPairs, repairEvents, []
 
 # Full repair in single pass.
-def fullRepair(baseBreaks, sigma, repeats=1, addFociClearance=True, radius=1, 
-			   chromSizes=None, sizeLimit=0, finalTime=np.inf):
+def fullRepair(baseBreaks, sigma, repeats=1, addFociClearance=True, radius=1,
+			   chromSizes=None, sizeLimit=0, finalTime=np.inf, repairFailure = True):
 	# Sort breaks in order of time of creation and build table of interaction rates
 	baseBreaks.sort(key = lambda x:x[7])
 	rateTable = buildRateTable(baseBreaks,sigma)
 
+	# Data stores
 	fullMisrepairPairs = []
-	fullRepairEvents = []
+	fullRepairTimes = []
 
+	# Iterate over repeats
 	for n in range(repeats):
 		pairRates = []
 		breakList = copy.deepcopy(baseBreaks)
-		misrepairedPairs, repairEvents, remBreaks = singleRepair(breakList,rateTable.copy())
-		
+		misrepairedPairs, repairEvents, remBreaks = singleRepair(breakList,rateTable.copy(),
+																 chromSizes = chromSizes, repairFailure = repairFailure)
+
 		# Filter out any intra-chromosome breaks below size limit
 		if sizeLimit>=0 and chromSizes is not None:
 			for i in range(len(misrepairedPairs)-1,-1,-1):
@@ -221,22 +339,7 @@ def fullRepair(baseBreaks, sigma, repeats=1, addFociClearance=True, radius=1,
 						misrepairedPairs.pop(i)
 
 		fullMisrepairPairs.append(misrepairedPairs)
-		fullRepairEvents+=repairEvents
-
-	if addFociClearance:
-		fullRepairTimes = []
-		for t,p1,p2,complexity in fullRepairEvents:
-			repRate = fastFoci
-			if baseBreaks[p1][0]!=baseBreaks[p2][0]:
-				repRate=mmejFoci
-			else:
-				if complexity>0:
-					repRate = slowFoci
-			fullRepairTimes.append(t-np.log(np.random.random())/repRate)
-
-		fullRepairTimes = sorted(fullRepairTimes)
-	else:
-		fullRepairTimes = sorted([x[0] for x in fullRepairEvents])
+		fullRepairTimes += calculateRepairKinetics(repairEvents,addFociClearance)
 
 	# Calculate rate of misrepair and stdev
 	misrepairCounts = [len(m) for m in fullMisrepairPairs]
@@ -249,7 +352,7 @@ def fullRepair(baseBreaks, sigma, repeats=1, addFociClearance=True, radius=1,
 
 	analyticRate, errRate = analyticRepair(baseBreaks,rateTable,sigma,radius)
 
-	return misrepRate,stdevRate,interChromRate,fullRepairTimes, analyticRate, errRate
+	return misrepRate,stdevRate,interChromRate, fullRepairTimes, analyticRate, errRate
 
 # Analytic repair method - gives fast approximation, but only valid for X-rays
 def analyticRepair(breakList,rateTable,sigma,radius):

@@ -47,6 +47,7 @@ sigma = 0.04187 # Misrepair range, as fraction of nuclear radius
 maxExposures = 1000  # Maximum exposures per file to simulate
 repeats = 50		 # Number of repeats for each exposure
 minMisrepSize = 0 	 # Neglect misrepair events separated by less than this genetic distance (MBP)
+repairFailure = True # Include repair failure for correct end joining
 
 # Options for fidelity repair output
 writeKinetics = True
@@ -95,13 +96,15 @@ def prepareDamage(misrepairList, remainingBreaks, chromosomes):
 
 def listAcentricSizes(baseChromosomes, finalChromosomes,pos=0.5):
 	fullChroms = analyzeAberrations.characteriseChroms(finalChromosomes)
-	print('\n\nAcentric sizes:')
+	print('\n\nAcentric sizes:', end='\t')
+	acentrics = []
 	for c in fullChroms:
 		centromereCount = analyzeAberrations.centricCount(c,baseChromosomes,pos)
 
 		if centromereCount==0:
 			theSize = sum( abs(f[1]-f[2]) for f in c[3])
-			print(theSize)
+			acentrics.append(theSize)
+	print('\t'.join(map(str, sorted(acentrics))))
 
 def misrepairSpectrum(fileData, header, fileName):
 	allBreaks, scaledSigma, meanE, complexity, complexitySd, dose, emptySets = fileData
@@ -119,6 +122,7 @@ def misrepairSpectrum(fileData, header, fileName):
 		return None
 
 	noChroms = header['Chromosomes'][0]
+	chromSizes = header['Chromosomes'][1]
 	baseChromosomes = [[n,0,header['Chromosomes'][1][n] ] for n in range(noChroms) ]
 	fullFrags = []
 	allChroms = []
@@ -127,7 +131,8 @@ def misrepairSpectrum(fileData, header, fileName):
 		if m>=maxExposures:
 			break
 		misrepList,repList, remBreaks = calcMR.singleRepair(copy.deepcopy(breakList), None, 
-															scaledSigma, finalTime = simulationLimit)
+															scaledSigma, finalTime = simulationLimit,
+															chromSizes = chromSizes, repairFailure=repairFailure)
 		trimMisrep, trimRemBreaks = prepareDamage(misrepList, remBreaks, baseChromosomes)
 
 		chroms, rings, frags = analyzeAberrations.doRepair(baseChromosomes, trimMisrep, 
@@ -169,22 +174,23 @@ def summariseKinetics(repairTimes):
 
 # Generate a set of summary statistics for a file
 def summariseFidelity(fileName, complexity, outputs):
-	totalBreaks = 1.0*sum(o[0] for o in outputs)
+	totalBreaks = sum(o[0] for o in outputs)
 	averageBreaks = np.mean([o[0] for o in outputs])
 	breakStdev = np.std([o[0] for o in outputs])
 
 	if totalBreaks>0:
 		averageMisrep = np.mean([o[0]*o[1] for o in outputs])/averageBreaks
 		misrepStdev   = np.std([o[1] for o in outputs])
-		fileAverages = [sum([o[n]*o[0] for o in outputs])/totalBreaks for n in range(3,6)]
+		averageInterChrom = sum([o[3]*o[1]*o[0] for o in outputs])/sum([o[1]*o[0] for o in outputs])
+		otherAverages = [sum([o[n]*o[0] for o in outputs])/totalBreaks for n in range(4,6)]
 	else:
 		averageMisrep=0 
 		misrepStdev = 0 
-		fileAverages = [0,0,0]
+		averageInterChrom = 0
+		otherAverages = [0,0,0]
 	smry = (fileName+'\tSummary\t'+str(totalBreaks)+'\t'+str(complexity)+'\t'+str(averageBreaks)+
 		   '\t'+str(breakStdev)+'\t'+str(averageMisrep)+'\t'+str(misrepStdev)+'\t'+
-		   str(fileAverages[0]) )
-	#smry+= '\t\t'+'\t'.join(map(str,fileAverages[1:]))
+		   str(averageInterChrom) )
 	return smry
 
 fidelityRun = False
@@ -215,16 +221,17 @@ def repairFidelity(fileData, header, fileName):
 		else:
 			repairData = calcMR.fullRepair(breakList, scaledSigma, repeats=repeats, 
 										   addFociClearance=addFociDelay, radius=radius, 
-										   chromSizes = chromSizes, sizeLimit = minMisrepSize)
+										   chromSizes = chromSizes, sizeLimit = minMisrepSize,
+										   repairFailure=repairFailure)
 
 		# Unpack repair data
-		mean, stdevRate, interChromRate, repTimes, analyticMisrep, etaSum = repairData
-		outputs.append([len(breakList)/2.0, mean, stdevRate, 
+		meanMisrep, stdevRate, interChromRate, repTimes, analyticMisrep, etaSum = repairData
+		outputs.append([len(breakList)/2.0, meanMisrep, stdevRate, 
 					   interChromRate, analyticMisrep, etaSum])
 		outputTimes+=repTimes
 
 		# Write misrepair and kinetic data
-		print(mean,'\t', stdevRate,'\t',interChromRate, end='')
+		print(meanMisrep,'\t', stdevRate,'\t',interChromRate, end='')
 		#print('\t\t','\t'.join(map(str,[analyticMisrep, etaSum])), end='')
 		if writeAllKinetics:
 			print('\t\t', summariseKinetics(repTimes), end='')
@@ -280,7 +287,7 @@ def misrepairSeparation(fileData,header,fileName):
 			break
 		totBreaks+=len(breakList)
 		for n in range(repeats):
-			misrepList,repList, remBreaks = calcMR.singleRepair(copy.deepcopy(breakList), None, scaledSigma)
+			misrepList,repList, remBreaks = calcMR.singleRepair(copy.deepcopy(breakList), None, scaledSigma, repairFailure=repairFailure)
 			misrepairSeps+=[mis[2] for mis in misrepList]
 
 	m = m+1 # Total exposures counted
