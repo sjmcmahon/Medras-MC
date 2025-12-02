@@ -270,6 +270,7 @@ def misrepairSeparation(fileData,header,fileName):
 	radius = scaledSigma/sigma
 	maxSeparation = 2*radius
 	rBins = [n*(maxSeparation*1.0/bins) for n in range(bins+1)]
+	chromSizes = header['Chromosomes'][1]
 
 	# For first run, print header
 	global separationRun
@@ -287,7 +288,7 @@ def misrepairSeparation(fileData,header,fileName):
 			break
 		totBreaks+=len(breakList)
 		for n in range(repeats):
-			misrepList,repList, remBreaks = calcMR.singleRepair(copy.deepcopy(breakList), None, scaledSigma, repairFailure=repairFailure)
+			misrepList,repList, remBreaks = calcMR.singleRepair(copy.deepcopy(breakList), None, scaledSigma, repairFailure=repairFailure, chromSizes=chromSizes)
 			misrepairSeps+=[mis[2] for mis in misrepList]
 
 	m = m+1 # Total exposures counted
